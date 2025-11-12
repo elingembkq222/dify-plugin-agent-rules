@@ -1,0 +1,34 @@
+identity:
+  name: "dify-plugin-agent-rules"
+  author: "henson"
+  label:
+    en_US: "dify-plugin-agent-rules"
+    zh_Hans: "dify-plugin-agent-rules"
+    pt_BR: "dify-plugin-agent-rules"
+    ja_JP: "dify-plugin-agent-rules"
+description:
+  human:
+    en_US: "Agent rules"
+    zh_Hans: "Agent rules"
+    pt_BR: "Agent rules"
+    ja_JP: "Agent rules"
+  llm: "Agent rules"
+parameters:
+  - name: query
+    type: string
+    required: true
+    label:
+      en_US: Query string
+      zh_Hans: 查询语句
+      pt_BR: Query string
+      ja_JP: クエリ文字列
+    human_description:
+      en_US: "Agent rules"
+      zh_Hans: "Agent rules"
+      pt_BR: "Agent rules"
+      ja_JP: "Agent rules"
+    llm_description: "Agent rules"
+    form: llm
+extra:
+  python:
+    source: tools/dify-plugin-agent-rules.py
