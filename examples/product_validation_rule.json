@@ -1,0 +1,43 @@
+{
+  "name": "产品验证规则",
+  "description": "验证产品信息的规则",
+  "target": "product",
+  "rules": [
+    {
+      "id": "price_check",
+      "expression": {
+        "field": "price",
+        "operator": "gte",
+        "value": 0
+      },
+      "message": "产品价格不能为负数"
+    },
+    {
+      "id": "stock_check",
+      "expression": {
+        "field": "stock",
+        "operator": "gte",
+        "value": 0
+      },
+      "message": "产品库存不能为负数"
+    },
+    {
+      "id": "category_check",
+      "expression": {
+        "field": "category",
+        "operator": "in",
+        "value": ["电子产品", "服装", "食品", "图书", "家居"]
+      },
+      "message": "产品类别必须是预定义的类别之一"
+    },
+    {
+      "id": "rating_check",
+      "expression": {
+        "field": "rating",
+        "operator": "between",
+        "value": [0, 5]
+      },
+      "message": "产品评分必须在0到5之间"
+    }
+  ]
+}

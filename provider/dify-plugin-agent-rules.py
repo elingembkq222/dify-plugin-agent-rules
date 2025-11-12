@@ -8,46 +8,13 @@ class DifyPluginAgentRulesProvider(ToolProvider):
     
     def _validate_credentials(self, credentials: dict[str, Any]) -> None:
         try:
-            """
-            IMPLEMENT YOUR VALIDATION HERE
-            """
+            # Validate required configuration
+            if not credentials.get("RULE_DB_URL"):
+                raise ToolProviderCredentialValidationError("Rule Database URL is required")
+            
+            # Initialize rule database if needed
+            from .rule_storage import init_rule_db
+            init_rule_db(credentials["RULE_DB_URL"])
+            
         except Exception as e:
             raise ToolProviderCredentialValidationError(str(e))
-
-    #########################################################################################
-    # If OAuth is supported, uncomment the following functions.
-    # Warning: please make sure that the sdk version is 0.4.2 or higher.
-    #########################################################################################
-    # def _oauth_get_authorization_url(self, redirect_uri: str, system_credentials: Mapping[str, Any]) -> str:
-    #     """
-    #     Generate the authorization URL for dify-plugin-agent-rules OAuth.
-    #     """
-    #     try:
-    #         """
-    #         IMPLEMENT YOUR AUTHORIZATION URL GENERATION HERE
-    #         """
-    #     except Exception as e:
-    #         raise ToolProviderOAuthError(str(e))
-    #     return ""
-        
-    # def _oauth_get_credentials(
-    #     self, redirect_uri: str, system_credentials: Mapping[str, Any], request: Request
-    # ) -> Mapping[str, Any]:
-    #     """
-    #     Exchange code for access_token.
-    #     """
-    #     try:
-    #         """
-    #         IMPLEMENT YOUR CREDENTIALS EXCHANGE HERE
-    #         """
-    #     except Exception as e:
-    #         raise ToolProviderOAuthError(str(e))
-    #     return dict()
-
-    # def _oauth_refresh_credentials(
-    #     self, redirect_uri: str, system_credentials: Mapping[str, Any], credentials: Mapping[str, Any]
-    # ) -> OAuthCredentials:
-    #     """
-    #     Refresh the credentials
-    #     """
-    #     return OAuthCredentials(credentials=credentials, expires_at=-1)

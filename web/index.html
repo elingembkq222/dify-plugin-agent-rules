@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rule Engine 管理控制台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: #4a6fdc;
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background-color: #4a6fdc;
+            border-color: #4a6fdc;
+        }
+        .btn-primary:hover {
+            background-color: #3a5fc9;
+            border-color: #3a5fc9;
+        }
+        .rule-card {
+            border-left: 4px solid #4a6fdc;
+            margin-bottom: 15px;
+        }
+        .rule-expression {
+            background-color: #f1f3f9;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .nav-tabs .nav-link.active {
+            background-color: #4a6fdc;
+            color: white;
+            border-color: #4a6fdc;
+        }
+        .nav-tabs .nav-link {
+            color: #4a6fdc;
+        }
+        .form-control:focus {
+            border-color: #4a6fdc;
+            box-shadow: 0 0 0 0.25rem rgba(74, 111, 220, 0.25);
+        }
+        .spinner-border {
+            color: #4a6fdc;
+        }
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
+        .toast {
+            min-width: 300px;
+        }
+        .toast.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .toast.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .json-editor {
+            min-height: 300px;
+            font-family: monospace;
+        }
+        .query-result {
+            background-color: #f1f3f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <h1 class="text-center">
+                    <i class="bi bi-gear-fill"></i> Rule Engine 管理控制台
+                </h1>
+                <p class="text-center text-muted">管理和验证业务规则</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <ul class="nav nav-tabs" id="ruleTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="list-tab" data-bs-toggle="tab" data-bs-target="#list" type="button" role="tab" aria-controls="list" aria-selected="true">
+                            <i class="bi bi-list-ul"></i> 规则列表
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#add" type="button" role="tab" aria-controls="add" aria-selected="false">
+                            <i class="bi bi-plus-circle"></i> 添加规则
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="validate-tab" data-bs-toggle="tab" data-bs-target="#validate" type="button" role="tab" aria-controls="validate" aria-selected="false">
+                            <i class="bi bi-check-circle"></i> 验证规则
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate" type="button" role="tab" aria-controls="generate" aria-selected="false">
+                            <i class="bi bi-magic"></i> 生成规则
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="ruleTabsContent">
+                    <!-- 规则列表 -->
+                    <div class="tab-pane fade show active" id="list" role="tabpanel" aria-labelledby="list-tab">
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <i class="bi bi-list-ul"></i> 规则列表
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-filter"></i></span>
+                                            <input type="text" class="form-control" id="targetFilter" placeholder="按目标过滤...">
+                                            <button class="btn btn-outline-secondary" type="button" id="filterBtn">过滤</button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <button class="btn btn-primary" type="button" id="refreshBtn">
+                                            <i class="bi bi-arrow-clockwise"></i> 刷新
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="rulesList" class="row">
+                                    <!-- 规则列表将在这里动态生成 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 添加规则 -->
+                    <div class="tab-pane fade" id="add" role="tabpanel" aria-labelledby="add-tab">
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <i class="bi bi-plus-circle"></i> 添加规则集
+                            </div>
+                            <div class="card-body">
+                                <form id="addRuleForm">
+                                    <div class="mb-3">
+                                        <label for="ruleName" class="form-label">规则集名称</label>
+                                        <input type="text" class="form-control" id="ruleName" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="ruleTarget" class="form-label">目标</label>
+                                        <input type="text" class="form-control" id="ruleTarget" placeholder="例如: user, product, order">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="ruleDescription" class="form-label">描述</label>
+                                        <textarea class="form-control" id="ruleDescription" rows="3"></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="ruleJson" class="form-label">规则集 JSON</label>
+                                        <textarea class="form-control json-editor" id="ruleJson" rows="10" placeholder='{"name": "规则集名称", "target": "目标", "rules": [{"id": "rule1", "expression": {"field": "age", "operator": "gt", "value": 18}, "message": "年龄必须大于18岁"}]}' required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-plus-circle"></i> 添加规则集
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 验证规则 -->
+                    <div class="tab-pane fade" id="validate" role="tabpanel" aria-labelledby="validate-tab">
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <i class="bi bi-check-circle"></i> 验证规则
+                            </div>
+                            <div class="card-body">
+                                <form id="validateRuleForm">
+                                    <div class="mb-3">
+                                        <label for="rulesetId" class="form-label">规则集 ID</label>
+                                        <select class="form-select" id="rulesetId" required>
+                                            <option value="">选择规则集...</option>
+                                            <!-- 规则集选项将在这里动态生成 -->
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="contextData" class="form-label">上下文数据</label>
+                                        <textarea class="form-control json-editor" id="contextData" rows="10" placeholder='{"user": {"age": 20, "name": "John"}, "action": "purchase"}' required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-check-circle"></i> 验证
+                                    </button>
+                                </form>
+                                <div id="validationResult" class="mt-3">
+                                    <!-- 验证结果将在这里显示 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 生成规则 -->
+                    <div class="tab-pane fade" id="generate" role="tabpanel" aria-labelledby="generate-tab">
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <i class="bi bi-magic"></i> 从自然语言生成规则
+                            </div>
+                            <div class="card-body">
+                                <form id="generateRuleForm">
+                                    <div class="mb-3">
+                                        <label for="naturalQuery" class="form-label">自然语言查询</label>
+                                        <textarea class="form-control" id="naturalQuery" rows="3" placeholder="例如：检查用户年龄是否大于18岁" required></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="queryContext" class="form-label">上下文数据结构</label>
+                                        <textarea class="form-control json-editor" id="queryContext" rows="5" placeholder='{"user": {"age": 20, "name": "John"}}'></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-magic"></i> 生成规则
+                                    </button>
+                                </form>
+                                <div id="generatedRule" class="query-result mt-3">
+                                    <!-- 生成的规则将在这里显示 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container">
+        <div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <strong class="me-auto">通知</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                <!-- 通知内容 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="api.js"></script>
+</body>
+</html>

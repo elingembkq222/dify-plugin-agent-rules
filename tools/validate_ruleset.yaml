@@ -1,0 +1,36 @@
+identity:
+  name: validate_ruleset
+  author: dify
+  label:
+    en_US: Validate Ruleset
+    zh_Hans: 验证规则集
+  description:
+    en_US: Validate user input using rule engine
+    zh_Hans: 使用规则引擎验证用户输入
+  icon: icon.svg
+  tags:
+    - api
+    - rules
+    - validation
+parameters:
+  - name: ruleset_id
+    type: string
+    required: true
+    label:
+      en_US: Ruleset ID
+      zh_Hans: 规则集ID
+    form: llm
+    max_length: 128
+  - name: context
+    type: object
+    required: true
+    label:
+      en_US: Context Data
+      zh_Hans: 上下文数据
+    form: llm
+    placeholder:
+      en_US: '{"key": "value"}'
+      zh_Hans: '{"键": "值"}'
+extra:
+  python:
+    source: tools/validate_ruleset.py

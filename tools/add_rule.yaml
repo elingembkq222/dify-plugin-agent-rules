@@ -1,0 +1,28 @@
+identity:
+  name: add_rule
+  author: dify
+  label:
+    en_US: Add Rule
+    zh_Hans: 添加规则
+  description:
+    en_US: Add or update a rule set
+    zh_Hans: 添加或更新规则集
+  icon: icon.svg
+  tags:
+    - api
+    - rules
+    - management
+parameters:
+  - name: rule_json
+    type: object
+    required: true
+    label:
+      en_US: Rule Set JSON
+      zh_Hans: 规则集JSON
+    form: llm
+    placeholder:
+      en_US: '{"name": "Rule Name", "target": "target", "rules": [...]}'
+      zh_Hans: '{"name": "规则名称", "target": "目标", "rules": [...]}'
+extra:
+  python:
+    source: tools/add_rule.py

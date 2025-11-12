@@ -1,0 +1,37 @@
+{
+  "name": "用户验证规则",
+  "description": "验证用户输入的规则",
+  "target": "user",
+  "rules": [
+    {
+      "id": "age_check",
+      "expression": {
+        "field": "age",
+        "operator": "gt",
+        "value": 18
+      },
+      "message": "用户年龄必须大于18岁"
+    },
+    {
+      "id": "email_check",
+      "expression": {
+        "field": "email",
+        "operator": "contains",
+        "value": "@"
+      },
+      "message": "邮箱地址无效"
+    },
+    {
+      "id": "name_check",
+      "expression": {
+        "field": "name",
+        "operator": "length",
+        "value": {
+          "min": 2,
+          "max": 50
+        }
+      },
+      "message": "用户名长度必须在2到50个字符之间"
+    }
+  ]
+}

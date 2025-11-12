@@ -1,0 +1,28 @@
+identity:
+  name: list_rules
+  author: dify
+  label:
+    en_US: List Rules
+    zh_Hans: 列出规则
+  description:
+    en_US: List all available rule sets
+    zh_Hans: 列出所有可用的规则集
+  icon: icon.svg
+  tags:
+    - api
+    - rules
+    - management
+parameters:
+  - name: target
+    type: string
+    required: false
+    label:
+      en_US: Target Filter
+      zh_Hans: 目标过滤器
+    form: llm
+    placeholder:
+      en_US: Filter by target (optional)
+      zh_Hans: 按目标过滤（可选）
+extra:
+  python:
+    source: tools/list_rules.py

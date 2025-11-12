@@ -3,15 +3,15 @@ type: plugin
 author: henson
 name: dify-plugin-agent-rules
 label:
-  en_US: dify-plugin-agent-rules
-  ja_JP: dify-plugin-agent-rules
-  zh_Hans: dify-plugin-agent-rules
-  pt_BR: dify-plugin-agent-rules
+  en_US: Rule Engine Plugin
+  ja_JP: Rule Engine Plugin
+  zh_Hans: 智能规则引擎插件
+  pt_BR: Rule Engine Plugin
 description:
-  en_US: Agent rules
-  ja_JP: Agent rules
-  zh_Hans: Agent rules
-  pt_BR: Agent rules
+  en_US: Manage and validate business rules for Dify Agents
+  ja_JP: Manage and validate business rules for Dify Agents
+  zh_Hans: 面向Agent的业务规则管理与校验插件
+  pt_BR: Manage and validate business rules for Dify Agents
 icon: icon.svg
 icon_dark: icon-dark.svg
 resource:
