@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 from dify_plugin import Tool
 
-from provider.rule_storage import list_rule_sets
+from provider.rule_storage import list_all_rule_sets, get_rule_sets_by_target
 
 
 class ListRules(Tool):
@@ -28,8 +28,11 @@ class ListRules(Tool):
             List of rule sets
         """
         try:
-            # Get all rule sets
-            rule_sets = list_rule_sets(target)
+            # Get rule sets based on target filter
+            if target:
+                rule_sets = get_rule_sets_by_target(target)
+            else:
+                rule_sets = list_all_rule_sets()
             
             # Format the response
             formatted_rules = []
@@ -70,6 +73,7 @@ class ListRules(Tool):
                 "type": "string",
                 "required": False,
                 "label": "Target Filter",
+                "human_description": "Optional filter for rule sets by target",
                 "description": "Optional filter for rule sets by target"
             }
         }

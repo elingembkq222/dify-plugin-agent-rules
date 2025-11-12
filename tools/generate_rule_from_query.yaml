@@ -4,15 +4,13 @@ identity:
   label:
     en_US: Generate Rule from Query
     zh_Hans: 从查询生成规则
-  description:
+  icon: icon.svg
+description:
+  human:
     en_US: Generate a rule from natural language query using LLM
     zh_Hans: 使用LLM从自然语言查询生成规则
-  icon: icon.svg
-  tags:
-    - api
-    - rules
-    - generation
-    - llm
+  llm: Generate a rule from natural language query using LLM
+
 parameters:
   - name: query
     type: string
@@ -21,9 +19,11 @@ parameters:
       en_US: Natural Language Query
       zh_Hans: 自然语言查询
     form: llm
-    placeholder:
-      en_US: "e.g., Check if user age is greater than 18"
-      zh_Hans: "例如：检查用户年龄是否大于18岁"
+    max_length: 1000
+    human_description:
+      en_US: Natural language query to convert to a rule
+      zh_Hans: 要转换为规则的自然语言查询
+    llm_description: Natural language query to convert to a rule
   - name: context
     type: object
     required: false
@@ -32,8 +32,12 @@ parameters:
       zh_Hans: 上下文数据结构
     form: llm
     placeholder:
-      en_US: '{"user": {"age": 20, "name": "John"}}'
-      zh_Hans: '{"用户": {"年龄": 20, "姓名": "张三"}}'
+      en_US: '{"key": "value"}'
+      zh_Hans: '{"键": "值"}'
+    human_description:
+      en_US: Context data structure for the rule
+      zh_Hans: 规则的上下文数据结构
+
 extra:
   python:
     source: tools/generate_rule_from_query.py

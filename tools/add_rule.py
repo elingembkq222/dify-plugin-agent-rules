@@ -77,6 +77,7 @@ class AddRule(Tool):
                 "type": "object",
                 "required": True,
                 "label": "Rule Set JSON",
+                "human_description": "Complete RuleSet JSON to add or update",
                 "description": "Complete RuleSet JSON to add or update"
             }
         }

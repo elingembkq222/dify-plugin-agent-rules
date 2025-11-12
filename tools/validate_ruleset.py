@@ -71,12 +71,14 @@ class ValidateRuleset(Tool):
                 "type": "string",
                 "required": True,
                 "label": "Ruleset ID",
+                "human_description": "ID of the ruleset to validate against",
                 "description": "ID of the ruleset to validate against"
             },
             "context": {
                 "type": "object",
                 "required": True,
                 "label": "Context Data",
+                "human_description": "Context data to validate",
                 "description": "Context data to validate"
             }
         }

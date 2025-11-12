@@ -4,14 +4,13 @@ identity:
   label:
     en_US: Add Rule
     zh_Hans: 添加规则
-  description:
-    en_US: Add or update a rule set
-    zh_Hans: 添加或更新规则集
   icon: icon.svg
-  tags:
-    - api
-    - rules
-    - management
+description:
+  human:
+    en_US: Add or update a rule set in the rule engine
+    zh_Hans: 在规则引擎中添加或更新规则集
+  llm: Add or update a rule set in the rule engine
+
 parameters:
   - name: rule_json
     type: object
@@ -20,9 +19,10 @@ parameters:
       en_US: Rule Set JSON
       zh_Hans: 规则集JSON
     form: llm
-    placeholder:
-      en_US: '{"name": "Rule Name", "target": "target", "rules": [...]}'
-      zh_Hans: '{"name": "规则名称", "target": "目标", "rules": [...]}'
+    human_description:
+      en_US: Complete RuleSet JSON to add or update
+      zh_Hans: 要添加或更新的完整规则集JSON
+
 extra:
   python:
     source: tools/add_rule.py

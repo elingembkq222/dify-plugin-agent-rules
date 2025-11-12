@@ -1,63 +1,58 @@
 identity:
-  author: "henson"
-  name: "dify-plugin-agent-rules"
+  author: henson
+  name: dify-plugin-agent-rules
   label:
-    en_US: "Rule Engine Plugin"
-    zh_Hans: "智能规则引擎插件"
-    pt_BR: "Rule Engine Plugin"
-    ja_JP: "Rule Engine Plugin"
+    en_US: Rule Engine Plugin
+    zh_Hans: 智能规则引擎插件
   description:
-    en_US: "Manage and validate business rules for Dify Agents"
-    zh_Hans: "面向Agent的业务规则管理与校验插件"
-    pt_BR: "Manage and validate business rules for Dify Agents"
-    ja_JP: "Manage and validate business rules for Dify Agents"
-  icon: "icon.svg"
+    en_US: Manage and validate business rules for Dify Agents
+    zh_Hans: 面向Agent的业务规则管理与校验插件
+  icon: icon.svg
 
 configs_for_user:
   - name: RULE_DB_URL
     type: text
     label:
-      en_US: "Rule Database Connection URL"
-      zh_Hans: "规则数据库连接URL"
+      en_US: Rule Database Connection URL
+      zh_Hans: 规则数据库连接URL
     required: true
-    default: "sqlite:///rule_engine.db"
+    default: sqlite:///rule_engine.db
     help:
-      en_US: "Database connection URL for storing rules (SQLite, PostgreSQL, etc.)"
-      zh_Hans: "用于存储规则的数据库连接URL（SQLite、PostgreSQL等）"
+      en_US: Database connection URL for storing rules (SQLite, PostgreSQL, etc.)
+      zh_Hans: 用于存储规则的数据库连接URL（SQLite、PostgreSQL等）
   - name: BUSINESS_DB_URL
     type: text
     label:
-      en_US: "Business Database URL"
-      zh_Hans: "业务数据库URL"
+      en_US: Business Database URL
+      zh_Hans: 业务数据库URL
     required: false
     help:
-      en_US: "Optional business database URL for accessing external data"
-      zh_Hans: "可选的业务数据库URL，用于访问外部数据"
+      en_US: Optional business database URL for accessing external data
+      zh_Hans: 可选的业务数据库URL，用于访问外部数据
   - name: LLM_MODEL
     type: select
     label:
-      en_US: "LLM Model"
-      zh_Hans: "LLM模型"
+      en_US: LLM Model
+      zh_Hans: LLM模型
     required: true
-    default: "gpt-4o"
+    default: gpt-4o
     options:
-      - "gpt-3.5-turbo"
-      - "gpt-4"
-      - "gpt-4o"
-      - "gpt-4o-mini"
-      - "claude-3-haiku"
-      - "claude-3-sonnet"
-      - "claude-3-opus"
+      - gpt-3.5-turbo
+      - gpt-4
+      - gpt-4o
+      - gpt-4o-mini
+      - claude-3-haiku
+      - claude-3-sonnet
+      - claude-3-opus
     help:
-      en_US: "LLM model for rule generation and query parsing"
-      zh_Hans: "用于规则生成和查询解析的LLM模型"
+      en_US: LLM model for rule generation and query parsing
+      zh_Hans: 用于规则生成和查询解析的LLM模型
 
 tools:
   - tools/validate_ruleset.yaml
   - tools/add_rule.yaml
   - tools/list_rules.yaml
-  - tools/delete_rule.yaml
-  - tools/generate_rule.yaml
+  - tools/generate_rule_from_query.yaml
 
 extra:
   python:

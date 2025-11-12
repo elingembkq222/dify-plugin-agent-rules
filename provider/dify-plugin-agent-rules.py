@@ -5,7 +5,8 @@ from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 
 
 class DifyPluginAgentRulesProvider(ToolProvider):
-    
+    """规则引擎 Provider：校验连接配置 + 提供规则引擎复用"""
+
     def _validate_credentials(self, credentials: dict[str, Any]) -> None:
         try:
             # Validate required configuration

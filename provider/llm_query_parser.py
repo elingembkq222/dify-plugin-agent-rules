@@ -9,7 +9,7 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
-from dify_plugin import LLMType
+# Removed unused import LLMType
 
 
 class LLMQueryParser:

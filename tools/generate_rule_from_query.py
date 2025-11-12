@@ -71,12 +71,14 @@ class GenerateRuleFromQuery(Tool):
                 "type": "string",
                 "required": True,
                 "label": "Natural Language Query",
+                "human_description": "Natural language query to convert to a rule",
                 "description": "Natural language query to convert to a rule"
             },
             "context": {
                 "type": "object",
                 "required": False,
                 "label": "Context Data Structure",
+                "human_description": "Context data structure for the rule",
                 "description": "Context data structure for the rule"
             }
         }
