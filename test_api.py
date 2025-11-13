@@ -45,6 +45,15 @@ def test_add_rule():
     return response.json()
 
 
+def test_validate_ruleset(ruleset_id):
+    """Test the validate_ruleset endpoint"""
+    print("\nTesting validate_ruleset endpoint...")
+    url = f"{API_URL}/validate_ruleset"
+    response = requests.post(url, json={"ruleset_id": ruleset_id, "context": {"product": {"price": 100, "stock": 50}}})
+    print(f"Status code: {response.status_code}")
+    print(f"Response: {json.dumps(response.json(), indent=2)}")
+    return response.json()
+
 def test_list_rules():
     """Test the list_rules endpoint"""
     print("\nTesting list_rules endpoint...")
@@ -84,9 +93,14 @@ if __name__ == "__main__":
     list_result = test_list_rules()
     print("=" * 50)
 
+    # Test validate_ruleset
+    validate_result = test_validate_ruleset(add_result.get('ruleset_id'))
+    print("=" * 50)
+
     # Summary
     print("Tests completed!")
     print(f"generate_rule_from_query: {'PASS' if generate_result.get('success') else 'FAIL'}")
     print(f"add_rule: {'PASS' if add_result.get('success') else 'FAIL'}")
     print(f"list_rules: {'PASS' if list_result.get('success') else 'FAIL'}")
+    print(f"validate_ruleset: {'PASS' if validate_result.get('success') else 'FAIL'}")
     print(f"Total rules in database: {len(list_result.get('rules', []))}")

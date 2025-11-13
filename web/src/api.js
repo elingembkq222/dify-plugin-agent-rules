@@ -38,8 +38,8 @@ export const addRule = (ruleData) => {
   return axiosInstance.post('/add_rule', ruleData);
 };
 
-export const validateRuleset = (ruleset) => {
-  return axiosInstance.post('/validate_ruleset', { ruleset });
+export const validateRuleset = (data) => {
+  return axiosInstance.post('/validate_ruleset', data);
 };
 
 export const generateRule = (queryData) => {

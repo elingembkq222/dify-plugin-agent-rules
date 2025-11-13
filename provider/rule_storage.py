@@ -29,7 +29,9 @@ class RuleSet(Base):
     target = Column(String(100), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    applies_when = Column(JSON, nullable=True)
     rules = Column(JSON, nullable=False)
+    on_fail = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -91,7 +93,9 @@ def add_rule_set(rule_data: Dict[str, Any]) -> str:
             target=rule_data.get("target", "default"),
             name=rule_data.get("name", ""),
             description=rule_data.get("description", ""),
-            rules=rule_data.get("rules", [])
+            applies_when=rule_data.get("applies_when", []),
+            rules=rule_data.get("rules", []),
+            on_fail=rule_data.get("on_fail", {"action": "block", "notify": ["user"]})
         )
         
         db.add(rule_set)
@@ -122,7 +126,9 @@ def get_rule_set(rule_set_id: str) -> Optional[Dict[str, Any]]:
                 "target": rule_set.target,
                 "name": rule_set.name,
                 "description": rule_set.description,
+                "applies_when": rule_set.applies_when or [],
                 "rules": rule_set.rules,
+                "on_fail": rule_set.on_fail or {"action": "block", "notify": ["user"]},
                 "created_at": rule_set.created_at.isoformat() if rule_set.created_at else None,
                 "updated_at": rule_set.updated_at.isoformat() if rule_set.updated_at else None
             }
@@ -150,7 +156,9 @@ def get_rule_sets_by_target(target: str) -> List[Dict[str, Any]]:
                 "target": rs.target,
                 "name": rs.name,
                 "description": rs.description,
+                "applies_when": rs.applies_when or [],
                 "rules": rs.rules,
+                "on_fail": rs.on_fail or {"action": "block", "notify": ["user"]},
                 "created_at": rs.created_at.isoformat() if rs.created_at else None,
                 "updated_at": rs.updated_at.isoformat() if rs.updated_at else None
             }
@@ -176,7 +184,9 @@ def list_all_rule_sets() -> List[Dict[str, Any]]:
                 "target": rs.target,
                 "name": rs.name,
                 "description": rs.description,
+                "applies_when": rs.applies_when or [],
                 "rules": rs.rules,
+                "on_fail": rs.on_fail or {"action": "block", "notify": ["user"]},
                 "created_at": rs.created_at.isoformat() if rs.created_at else None,
                 "updated_at": rs.updated_at.isoformat() if rs.updated_at else None
             }
@@ -210,8 +220,12 @@ def update_rule_set(rule_set_id: str, rule_data: Dict[str, Any]) -> bool:
             rule_set.name = rule_data["name"]
         if "description" in rule_data:
             rule_set.description = rule_data["description"]
+        if "applies_when" in rule_data:
+            rule_set.applies_when = rule_data["applies_when"]
         if "rules" in rule_data:
             rule_set.rules = rule_data["rules"]
+        if "on_fail" in rule_data:
+            rule_set.on_fail = rule_data["on_fail"]
         
         rule_set.updated_at = datetime.utcnow()
         db.commit()

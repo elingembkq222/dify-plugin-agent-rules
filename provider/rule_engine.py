@@ -26,6 +26,12 @@ class RuleEngine:
         'le': operator.le,
         'gt': operator.gt,
         'ge': operator.ge,
+        '>': operator.gt,
+        '<': operator.lt,
+        '>=': operator.ge,
+        '<=': operator.le,
+        '==': operator.eq,
+        '!=': operator.ne,
         'and': operator.and_,
         'or': operator.or_,
         'not': operator.not_,
@@ -194,6 +200,29 @@ class RuleEngine:
                 'error': 'Invalid rule set'
             }
         
+        # Check if applies_when conditions are met
+        applies_when = rule_set.get('applies_when', [])
+        for condition in applies_when:
+            if not isinstance(condition, dict):
+                continue
+                
+            field = condition.get('field')
+            operator = condition.get('operator')
+            value = condition.get('value')
+            
+            if not field or not operator or value is None:
+                continue
+                
+            actual_value = resolve_data({'name': 'field_value', 'source': 'context', 'field': field}, context)
+            if not self._evaluate_operation(operator, actual_value, value, context):
+                # Conditions not met, rule set does not apply
+                return {
+                    'pass': True,  # Rule set doesn't apply, so no violation
+                    'violations': [],
+                    'message': 'Rule set conditions not met',
+                    'applies': False
+                }
+        
         # Resolve any required data for the rule set
         resolved_context = dict(context)
         
@@ -235,7 +264,9 @@ class RuleEngine:
             'violations': violations,
             'results': results,
             'rule_set_id': rule_set.get('id'),
-            'rule_set_name': rule_set.get('name')
+            'rule_set_name': rule_set.get('name'),
+            'on_fail': rule_set.get('on_fail', {'action': 'block', 'notify': ['user']}),
+            'applies': True
         }
 
 

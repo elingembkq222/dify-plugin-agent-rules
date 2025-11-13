@@ -18,13 +18,16 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // API代理路由
-app.post(/^\/api\//, async (req, res) => {
+app.all(/^\/api\//, async (req, res) => {
   try {
     const apiPath = req.originalUrl.replace(/^\/api\//, '');
     const targetUrl = `${DIFY_BACKEND_URL}/${apiPath}`;
     console.log('Proxying request to:', targetUrl);
     console.log('Request body:', req.body);
-    const response = await axios.post(targetUrl, req.body, {
+    const response = await axios.request({
+      method: req.method,
+      url: targetUrl,
+      data: req.body,
       headers: { ...req.headers, host: new URL(targetUrl).host }
     });
     console.log('Proxy response:', response.data);

@@ -151,9 +151,77 @@ print(json.dumps({ "success": True, "rules": result }, ensure_ascii=False));`
   });
 });
 
+// Validate ruleset endpoint
+app.post('/validate_ruleset', (req, res) => {
+  const { ruleset_id, context, ruleset } = req.body;
+  
+  if (!context) {
+    return res.status(400).json({ error: 'Missing required field: context' });
+  }
+
+  // Convert context to JSON string for Python execution
+  const context_json = JSON.stringify(context);
+  const ruleset_json = JSON.stringify(ruleset);
+
+  // Use Python to validate the ruleset
+  const pythonProcess = spawn('python3', [
+    '-c',
+    `import json;
+import os;
+from dotenv import load_dotenv;
+from provider.rule_storage import get_rule_set, init_rule_db;
+from provider.rule_engine import execute_rule_set;
+
+# Load environment variables
+load_dotenv();
+
+# Initialize database
+init_rule_db(os.getenv('RULE_DB_URL', 'sqlite:///rule_engine.db'));
+
+# Get the ruleset
+ruleset = None;
+${ruleset ? `ruleset = ${ruleset_json};` : `ruleset = get_rule_set('${ruleset_id}');`}
+if not ruleset:
+    print(json.dumps({"success": False, "error": "Ruleset not found"}, ensure_ascii=False));
+else:
+    # Execute the ruleset
+    context = ${context_json};
+    result = execute_rule_set(ruleset, context);
+    print(json.dumps({"success": True, "result": result}, ensure_ascii=False));`
+  ], { cwd: '../' });
+
+  let output = '';
+  let error = '';
+
+  pythonProcess.stdout.on('data', (data) => {
+    output += data.toString();
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    error += data.toString();
+  });
+
+  pythonProcess.on('close', (code) => {
+    if (code !== 0) {
+      console.error('Python error:', error);
+      return res.status(500).json({ error: 'Failed to validate ruleset', message: error });
+    }
+
+    try {
+      const result = JSON.parse(output);
+      res.json(result);
+    } catch (err) {
+      console.error('JSON parse error:', err);
+      console.error('Raw output:', output);
+      res.status(500).json({ error: 'Failed to parse validate ruleset result', message: err.message });
+    }
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Direct server running on http://localhost:${PORT}`);
   console.log('API endpoint: /api/generate_rule_from_query');
   console.log('API endpoint: /api/add_rule');
   console.log('API endpoint: /api/list_rules');
+  console.log('API endpoint: /api/validate_ruleset');
 });
