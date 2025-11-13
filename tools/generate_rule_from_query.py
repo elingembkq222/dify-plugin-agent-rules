@@ -5,6 +5,7 @@ This tool generates a rule from natural language query using LLM.
 """
 
 import json
+import os
 from typing import Any, Dict
 
 from dify_plugin import Tool
@@ -41,8 +42,11 @@ class GenerateRuleFromQuery(Tool):
             # Get LLM invoker from session
             llm_invoker = self.session.model_invoker
             
+            # Get LLM model from environment variable
+            llm_model = os.environ.get("LLM_MODEL", "gpt-4o")
+            
             # Parse query to rule set
-            rule = parse_query_to_ruleset(query, context, llm_invoker=llm_invoker)
+            rule = parse_query_to_ruleset(query, context, llm_invoker=llm_invoker, llm_model=llm_model)
             
             return {
                 "success": True,

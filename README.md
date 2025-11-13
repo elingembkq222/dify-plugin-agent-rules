@@ -18,6 +18,28 @@
    - `RULE_DB_URL`: 规则数据库 URL（默认: sqlite:///rule_engine.db）
    - `BUSINESS_DB_URL`: 业务数据库 URL（可选）
    - `LLM_MODEL`: 用于查询解析的 LLM 模型（默认: gpt-4o）
+   - `OPENAI_API_KEY`: OpenAI API 密钥（默认模型 gpt-4o 需要）
+   - `OPENAI_API_BASE`: OpenAI API 基础 URL（默认: https://api.openai.com/v1）
+   - `ALIYUN_ACCESS_KEY_ID`: 阿里云 API 访问密钥 ID（可选，使用阿里云模型时需要）
+   - `ALIYUN_ACCESS_KEY_SECRET`: 阿里云 API 访问密钥 Secret（可选，使用阿里云模型时需要）
+   - `ALIYUN_LLM_ENDPOINT`: 阿里云 LLM API 端点（可选，默认: https://dashscope.aliyuncs.com/compatible-mode/v1）
+   - `ALIYUN_LLM_MODEL`: 阿里云 LLM 模型名称（可选，默认: qwen-7b-chat-turbo）
+
+3. 环境变量配置示例（.env 文件）：
+   ```bash
+   # 使用 OpenAI GPT-4o（默认）
+   LLM_MODEL=gpt-4o
+   OPENAI_API_KEY=sk-xxxx
+   OPENAI_API_BASE=https://api.openai.com/v1
+   ```
+   ```bash
+   # 使用阿里云 Qwen 模型
+   LLM_MODEL=qwen-7b-chat-turbo
+   ALIYUN_ACCESS_KEY_ID=xxxx
+   ALIYUN_ACCESS_KEY_SECRET=xxxx
+   ALIYUN_LLM_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1
+   ALIYUN_LLM_MODEL=qwen-7b-chat-turbo
+   ```
 
 ## 工具接口
 

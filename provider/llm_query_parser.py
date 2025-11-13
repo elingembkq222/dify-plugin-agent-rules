@@ -8,15 +8,15 @@ and convert them into structured rule expressions.
 import json
 import os
 import uuid
+import requests
 from typing import Any, Dict, List, Optional, Union
+from dotenv import load_dotenv
 
-# Removed unused import LLMType
-
+# Load environment variables
+load_dotenv()
 
 class LLMQueryParser:
-    """
-    LLM Query Parser for converting natural language queries to rule expressions.
-    """
+    """    LLM Query Parser for converting natural language queries to rule expressions.    """
     
     def __init__(self, llm_model: str = "gpt-4o"):
         """
@@ -26,16 +26,25 @@ class LLMQueryParser:
             llm_model: LLM model to use for parsing
         """
         self.llm_model = llm_model
+        # Load API configurations from environment variables
+        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
+        self.aliyun_access_key_id = os.getenv("ALIYUN_ACCESS_KEY_ID")
+        self.aliyun_access_key_secret = os.getenv("ALIYUN_ACCESS_KEY_SECRET")
+        self.aliyun_llm_endpoint = os.getenv("ALIYUN_LLM_ENDPOINT", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+        self.aliyun_llm_model = os.getenv("ALIYUN_LLM_MODEL", "qwen-7b-chat-turbo")
+        # Load system prompt
+        self.system_prompt = self._get_system_prompt()
     
     def parse_query_to_rule(self, query: str, context: Dict[str, Any], 
-                           llm_invoker: Any) -> Dict[str, Any]:
+                           llm_invoker: Any = None) -> Dict[str, Any]:
         """
         Parse a natural language query into a rule expression.
         
         Args:
             query: Natural language query
             context: Context data for the query
-            llm_invoker: LLM invoker from Dify
+            llm_invoker: Deprecated, kept for compatibility
             
         Returns:
             Rule expression dictionary
@@ -44,27 +53,33 @@ class LLMQueryParser:
         prompt = self._create_rule_generation_prompt(query, context)
         
         try:
-            # Invoke the LLM
-            response = llm_invoker.invoke(
-                model_parameters={
-                    "model": self.llm_model,
-                    "prompt_messages": [
-                        {
-                            "role": "system",
-                            "text": self._get_system_prompt()
-                        },
-                        {
-                            "role": "user",
-                            "text": prompt
-                        }
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 1000
+            # Prepare prompt messages
+            prompt_messages = [
+                {
+                    "role": "system",
+                    "content": self.system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": prompt
                 }
-            )
+            ]
             
-            # Extract the response text
-            response_text = response.get("text", "")
+            # Invoke LLM directly based on model type
+            response_text = ""
+            if self.llm_model.startswith("gpt-"):
+                if not self.openai_api_key:
+                    raise ValueError("OpenAI API key is required for GPT models")
+                api_response = self._call_openai_api(prompt_messages, 0.1, 1000)
+                response_text = api_response["choices"][0]["message"]["content"]
+            elif self.llm_model.startswith("qwen-"):
+                if not self.aliyun_access_key_id or not self.aliyun_access_key_secret:
+                    raise ValueError("Alibaba Cloud API credentials are required for Qwen models")
+                api_response = self._call_aliyun_api(prompt_messages, 0.1, 1000)
+                response_text = api_response["choices"][0]["message"]["content"]
+            else:
+                # Unsupported model, use default rule
+                return self._create_default_rule(query)
             
             # Parse the JSON response
             try:
@@ -83,6 +98,59 @@ class LLMQueryParser:
             # Return a default rule if LLM invocation fails
             return self._create_default_rule(query)
     
+    def _call_openai_api(self, prompt_messages: List[Dict[str, str]], temperature: float, max_tokens: int) -> Dict:
+        """Call OpenAI API directly."""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.openai_api_key}"
+        }
+        data = {
+            "model": self.llm_model,
+            "messages": prompt_messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+        
+        # Debug: print request details
+        url = f"{self.openai_api_base}/chat/completions"
+        print(f"OpenAI API Request URL: {url}")
+        print(f"OpenAI API Request Headers: {headers}")
+        print(f"OpenAI API Request Data: {data}")
+        
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()  # Raise an error for bad status codes
+            # Debug: print response
+            print(f"OpenAI API Response: {response.json()}")
+            return response.json()
+        except Exception as e:
+            if hasattr(e, 'response'):
+                print(f"Failed to call OpenAI API: {e.response.status_code} {e.response.reason}")
+                print(f"Response content: {e.response.text}")
+            else:
+                print(f"Failed to call OpenAI API: {e}")
+            return None
+    
+    def _call_aliyun_api(self, prompt_messages, temperature, max_tokens):
+        """Call Alibaba Cloud LLM API directly."""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.aliyun_access_key_id}:{self.aliyun_access_key_secret}"
+        }
+        data = {
+            "model": self.aliyun_llm_model,
+            "messages": prompt_messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+        response = requests.post(
+            f"{self.aliyun_llm_endpoint}/chat/completions",
+            headers=headers,
+            json=data
+        )
+        response.raise_for_status()
+        return response.json()
+    
     def parse_query_to_ruleset(self, query: str, context: Dict[str, Any], 
                               target: str = "default", llm_invoker: Any = None) -> Dict[str, Any]:
         """
@@ -92,7 +160,7 @@ class LLMQueryParser:
             query: Natural language query
             context: Context data for the query
             target: Target for the rule set
-            llm_invoker: LLM invoker from Dify
+            llm_invoker: Deprecated, kept for compatibility
             
         Returns:
             Rule set dictionary
@@ -101,27 +169,33 @@ class LLMQueryParser:
         prompt = self._create_ruleset_generation_prompt(query, context)
         
         try:
-            # Invoke the LLM
-            response = llm_invoker.invoke(
-                model_parameters={
-                    "model": self.llm_model,
-                    "prompt_messages": [
-                        {
-                            "role": "system",
-                            "text": self._get_system_prompt()
-                        },
-                        {
-                            "role": "user",
-                            "text": prompt
-                        }
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 2000
+            # Prepare prompt messages
+            prompt_messages = [
+                {
+                    "role": "system",
+                    "content": self.system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": prompt
                 }
-            )
+            ]
             
-            # Extract the response text
-            response_text = response.get("text", "")
+            # Invoke LLM directly based on model type
+            response_text = ""
+            if self.llm_model.startswith("gpt-"):
+                if not self.openai_api_key:
+                    raise ValueError("OpenAI API key is required for GPT models")
+                api_response = self._call_openai_api(prompt_messages, 0.1, 2000)
+                response_text = api_response["choices"][0]["message"]["content"]
+            elif self.llm_model.startswith("qwen-"):
+                if not self.aliyun_access_key_id or not self.aliyun_access_key_secret:
+                    raise ValueError("Alibaba Cloud API credentials are required for Qwen models")
+                api_response = self._call_aliyun_api(prompt_messages, 0.1, 2000)
+                response_text = api_response["choices"][0]["message"]["content"]
+            else:
+                # Unsupported model, use default rule
+                return self._create_default_ruleset(query, target)
             
             # Parse the JSON response
             try:

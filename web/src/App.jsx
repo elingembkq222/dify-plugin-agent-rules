@@ -5,6 +5,7 @@ import RulesList from './components/RulesList';
 import AddRule from './components/AddRule';
 import ValidateRule from './components/ValidateRule';
 import GenerateRule from './components/GenerateRule';
+
 import { UnorderedListOutlined, PlusCircleOutlined, CheckCircleOutlined, TrademarkOutlined } from '@ant-design/icons';
 
 const { Title } = Typography;
@@ -53,8 +54,7 @@ const App = () => {
               ),
               children: <ValidateRule />,
             },
-            {
-              key: '4',
+            { key: '4',
               label: (
                 <span>
                   <TrademarkOutlined />
@@ -63,6 +63,7 @@ const App = () => {
               ),
               children: <GenerateRule />,
             },
+
           ]}
         />
       </Card>

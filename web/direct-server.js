@@ -8,7 +8,7 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-app.post('/generate_rule_from_query', (req, res) => {
+app.post('/api/generate_rule_from_query', (req, res) => {
   const { query } = req.body;
   
   if (!query) {
@@ -53,7 +53,7 @@ print(json.dumps(result, ensure_ascii=False));`
 });
 
 // Add a new rule endpoint
-app.post('/add_rule', (req, res) => {
+app.post('/api/add_rule', (req, res) => {
   const rule_data = req.body;
   
   if (!rule_data || !rule_data.target || !rule_data.name || !rule_data.rules) {
@@ -107,7 +107,7 @@ print(json.dumps({ "success": True, "ruleset_id": result }, ensure_ascii=False))
 });
 
 // List all rules endpoint
-app.get('/list_rules', (req, res) => {
+app.get('/api/list_rules', (req, res) => {
   // Use Python to list all rules
   const pythonProcess = spawn('python3', [
     '-c',
@@ -152,7 +152,7 @@ print(json.dumps({ "success": True, "rules": result }, ensure_ascii=False));`
 });
 
 // Validate ruleset endpoint
-app.post('/validate_ruleset', (req, res) => {
+app.post('/api/validate_ruleset', (req, res) => {
   const { ruleset_id, context, ruleset } = req.body;
   
   if (!context) {
