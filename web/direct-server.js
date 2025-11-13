@@ -52,7 +52,108 @@ print(json.dumps(result, ensure_ascii=False));`
   });
 });
 
+// Add a new rule endpoint
+app.post('/add_rule', (req, res) => {
+  const rule_data = req.body;
+  
+  if (!rule_data || !rule_data.target || !rule_data.name || !rule_data.rules) {
+    return res.status(400).json({ error: 'Missing required fields: target, name, rules' });
+  }
+
+  // Convert the rule data to a JSON string that can be passed to Python
+  const rule_json = JSON.stringify(rule_data).replace(/'/g, "\\'");
+
+  // Use Python to add the rule
+  const pythonProcess = spawn('python3', [
+    '-c',
+    `import json;
+import os;
+from dotenv import load_dotenv;
+from provider.rule_storage import add_rule_set, init_rule_db;
+# Load environment variables
+load_dotenv();
+# Initialize database
+init_rule_db(os.getenv('RULE_DB_URL', 'sqlite:///rule_engine.db'));
+result = add_rule_set(${rule_json});
+print(json.dumps({ "success": True, "ruleset_id": result }, ensure_ascii=False));`
+  ], { cwd: '../' });
+
+  let output = '';
+  let error = '';
+
+  pythonProcess.stdout.on('data', (data) => {
+    output += data.toString();
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    error += data.toString();
+  });
+
+  pythonProcess.on('close', (code) => {
+    if (code !== 0) {
+      console.error('Python error:', error);
+      return res.status(500).json({ error: 'Failed to add rule', message: error });
+    }
+
+    try {
+      const result = JSON.parse(output);
+      res.json(result);
+    } catch (err) {
+      console.error('JSON parse error:', err);
+      console.error('Raw output:', output);
+      res.status(500).json({ error: 'Failed to parse add rule result', message: err.message });
+    }
+  });
+});
+
+// List all rules endpoint
+app.get('/list_rules', (req, res) => {
+  // Use Python to list all rules
+  const pythonProcess = spawn('python3', [
+    '-c',
+    `import json;
+import os;
+from dotenv import load_dotenv;
+from provider.rule_storage import list_all_rule_sets, init_rule_db;
+# Load environment variables
+load_dotenv();
+# Initialize database
+init_rule_db(os.getenv('RULE_DB_URL', 'sqlite:///rule_engine.db'));
+result = list_all_rule_sets();
+print(json.dumps({ "success": True, "rules": result }, ensure_ascii=False));`
+  ], { cwd: '../' });
+
+  let output = '';
+  let error = '';
+
+  pythonProcess.stdout.on('data', (data) => {
+    output += data.toString();
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    error += data.toString();
+  });
+
+  pythonProcess.on('close', (code) => {
+    if (code !== 0) {
+      console.error('Python error:', error);
+      return res.status(500).json({ error: 'Failed to list rules', message: error });
+    }
+
+    try {
+      const result = JSON.parse(output);
+      res.json(result);
+    } catch (err) {
+      console.error('JSON parse error:', err);
+      console.error('Raw output:', output);
+      res.status(500).json({ error: 'Failed to parse list rules result', message: err.message });
+    }
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Direct server running on http://localhost:${PORT}`);
   console.log('API endpoint: /api/generate_rule_from_query');
+  console.log('API endpoint: /api/add_rule');
+  console.log('API endpoint: /api/list_rules');
 });

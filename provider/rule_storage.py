@@ -25,9 +25,9 @@ class RuleSet(Base):
     """RuleSet model for storing rule sets in the database."""
     __tablename__ = "x_rule_sets"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    target = Column(String, nullable=False, index=True)
-    name = Column(String, nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    target = Column(String(100), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     rules = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
