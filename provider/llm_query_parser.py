@@ -6,6 +6,7 @@ and convert them into structured rule expressions.
 """
 
 import json
+import os
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
@@ -146,65 +147,12 @@ class LLMQueryParser:
         Returns:
             System prompt string
         """
-        return """
-You are an AI assistant that converts natural language queries into structured RuleSets for a rule engine system.
-
-Your task is to analyze the user's query and generate a valid JSON RuleSet that can be evaluated by the rule engine.
-
-The RuleSet should follow this complete structure:
-{
-  "id": "unique_ruleset_id",
-  "target": "target_entity",
-  "name": "Rule Set Name",
-  "description": "Description of what this rule set does",
-  "applies_when": [
-    { "field": "request.field_name", "operator": "==", "value": "condition_value" }
-  ],
-  "rules": [
-    {
-      "id": "unique_rule_id",
-      "name": "Rule Name",
-      "type": "comparison",
-      "expression": "request.field <= value",
-      "message": "Message to display if this rule fails"
-    },
-    {
-      "id": "unique_rule_id",
-      "name": "Rule Name",
-      "type": "conditional",
-      "requires": [
-        {
-          "name": "external_data_name",
-          "source": "external_api",
-          "query": "GET `https://api.example.com/endpoint/{context.user_id}`",
-          "headers": { "Authorization": "Bearer ${env.API_TOKEN}" },
-          "transform": "data.field"
-        },
-        {
-          "name": "tool_data_name",
-          "source": "tool",
-          "tool": "tool_name",
-          "parameters": { "param1": "{{context.user_id}}" }
-        }
-      ],
-      "expression": "if(condition) true else false",
-      "message": "Message to display if this rule fails"
-    }
-  ],
-  "on_fail": { "action": "block", "notify": ["user"] }
-}
-
-Supported rule types:
-- comparison: Simple comparison rules using expressions like "request.field <= value"
-- conditional: Complex rules that require external data or tool results
-
-Supported functions in expressions:
-- add_months(date, months): Add or subtract months from a date
-- add_days(date, days): Add or subtract days from a date
-- now(): Get the current date and time
-
-Always respond with valid JSON only, without any additional text or explanation.
-"""
+        prompt_file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "../prompts/system_prompt.txt"
+        )
+        with open(prompt_file_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
     
     def _create_rule_generation_prompt(self, query: str, context: Dict[str, Any]) -> str:
         """
