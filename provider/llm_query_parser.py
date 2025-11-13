@@ -111,24 +111,13 @@ class LLMQueryParser:
             "max_tokens": max_tokens
         }
         
-        # Debug: print request details
         url = f"{self.openai_api_base}/chat/completions"
-        print(f"OpenAI API Request URL: {url}")
-        print(f"OpenAI API Request Headers: {headers}")
-        print(f"OpenAI API Request Data: {data}")
         
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()  # Raise an error for bad status codes
-            # Debug: print response
-            print(f"OpenAI API Response: {response.json()}")
             return response.json()
         except Exception as e:
-            if hasattr(e, 'response'):
-                print(f"Failed to call OpenAI API: {e.response.status_code} {e.response.reason}")
-                print(f"Response content: {e.response.text}")
-            else:
-                print(f"Failed to call OpenAI API: {e}")
             return None
     
     def _call_aliyun_api(self, prompt_messages, temperature, max_tokens):
