@@ -150,6 +150,7 @@ const AddRule = () => {
                   value={editableResult}
                   onChange={handleEditableResultChange}
                   rows={20}
+                  className="json-editor"
                   style={{ fontFamily: 'monospace', fontSize: '14px', marginBottom: '12px' }}
                   placeholder="生成的规则将显示在这里，可以直接编辑"
                 />

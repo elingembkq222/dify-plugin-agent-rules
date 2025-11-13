@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Form, Input, Button, message, Card } from 'antd';
 import { TrademarkOutlined } from '@ant-design/icons';
 import { generateRule } from '../api';
+import { prettyPrintJson } from 'pretty-print-json';
 
 const { TextArea } = Input;
 
@@ -87,7 +88,7 @@ const GenerateRule = () => {
         <Card title="生成结果" bordered={false} className="result-card">
           <div>
             <strong>生成的规则:</strong>
-            <pre>{JSON.stringify(generatedResult.rules, null, 2)}</pre>
+            <pre dangerouslySetInnerHTML={{ __html: prettyPrintJson.toHtml(generatedResult.rules, { indent: 3, lineNumbers: true, quoteKeys: false, linkUrls: true }) }} />
           </div>
           <Button
             type="primary"

@@ -106,7 +106,7 @@ const ValidateRule = () => {
                 {validationResult.success ? (
                   <div>
                     <strong>规则集结果:</strong>
-                    <pre dangerouslySetInnerHTML={{ __html: prettyPrintJson.toHtml(validationResult.result) }}></pre>
+                    <pre dangerouslySetInnerHTML={{ __html: prettyPrintJson.toHtml(validationResult.result, { indent: 3, lineNumbers: true, quoteKeys: false, linkUrls: true }) }}></pre>
                   </div>
                 ) : (
                   <div>

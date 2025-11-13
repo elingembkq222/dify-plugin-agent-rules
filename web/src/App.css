@@ -122,6 +122,39 @@
   margin-top: 16px;
 }
 
+
+
+.json-editor {
+  border: none;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  resize: vertical;
+  outline: none;
+}
+
+.json-editor:focus {
+  border: none;
+  box-shadow: none;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  outline: none;
+}
+
+.ant-input-textarea-wrapper:hover .ant-input-textarea.json-editor,
+.ant-input-textarea.json-editor:hover {
+  border: none;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.ant-input-textarea-wrapper:focus-within .ant-input-textarea.json-editor {
+  border: none;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  box-shadow: none;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-container {

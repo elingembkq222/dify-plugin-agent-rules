@@ -56,7 +56,38 @@
 - 验证规则集
 - 从自然语言生成规则
 
-访问 `web/index.html` 可以使用前端 UI。
+### 快速开始
+
+1. 进入 web 目录:
+   ```bash
+   cd web
+   ```
+
+2. 安装依赖:
+   ```bash
+   npm install
+   ```
+
+3. 启动开发服务器:
+   ```bash
+   npm run dev
+   ```
+
+4. 访问 `http://localhost:5173` 即可使用前端 UI。
+
+### 生产构建
+
+1. 构建项目:
+   ```bash
+   npm run build
+   ```
+
+2. 启动生产服务器:
+   ```bash
+   npm run server
+   ```
+
+构建后的文件将保存在 `web/dist` 目录中，生产服务器将在 `http://localhost:3000` 上运行。
 
 ## 示例规则集
 
