@@ -1,0 +1,28 @@
+identity:
+  name: delete_rule
+  author: dify
+  label:
+    en_US: Delete Rule
+    zh_Hans: 删除规则
+  icon: icon.svg
+description:
+  human:
+    en_US: Delete a rule set from the rule engine
+    zh_Hans: 从规则引擎中删除一个规则集
+  llm: Delete a rule set from the rule engine
+
+parameters:
+  - name: ruleset_id
+    type: string
+    required: true
+    label:
+      en_US: Rule Set ID
+      zh_Hans: 规则集ID
+    form: llm
+    human_description:
+      en_US: ID of the rule set to delete
+      zh_Hans: 要删除的规则集的ID
+
+extra:
+  python:
+    source: tools/delete_rule.py

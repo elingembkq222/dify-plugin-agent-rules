@@ -52,6 +52,7 @@ tools:
   - tools/validate_ruleset.yaml
   - tools/add_rule.yaml
   - tools/list_rules.yaml
+  - tools/delete_rule.yaml
   - tools/generate_rule_from_query.yaml
 
 extra:

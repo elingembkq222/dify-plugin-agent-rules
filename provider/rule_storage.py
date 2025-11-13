@@ -23,7 +23,7 @@ Base = declarative_base()
 
 class RuleSet(Base):
     """RuleSet model for storing rule sets in the database."""
-    __tablename__ = "rule_sets"
+    __tablename__ = "x_rule_sets"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     target = Column(String, nullable=False, index=True)
@@ -39,11 +39,20 @@ def init_rule_db(db_url: str) -> None:
     Initialize the rule database with the given connection URL.
     
     Args:
-        db_url: Database connection URL (e.g., "sqlite:///rule_engine.db")
+        db_url: Database connection URL (e.g., "sqlite:///rule_engine.db" or "mysql+pymysql://user:password@localhost:3306/rule_engine?charset=utf8mb4")
     """
     global engine, SessionLocal
     
-    engine = create_engine(db_url)
+    # MySQL specific configuration
+    engine_kwargs = {}
+    if db_url.startswith("mysql+pymysql://"):
+        engine_kwargs.update({
+            'encoding': 'utf-8',
+            'pool_pre_ping': True,
+            'pool_recycle': 3600
+        })
+    
+    engine = create_engine(db_url, **engine_kwargs)
     
     # Create all tables
     Base.metadata.create_all(engine)
