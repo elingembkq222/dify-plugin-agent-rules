@@ -147,68 +147,61 @@ class LLMQueryParser:
             System prompt string
         """
         return """
-You are an AI assistant that converts natural language queries into structured rule expressions for a rule engine system.
+You are an AI assistant that converts natural language queries into structured RuleSets for a rule engine system.
 
-Your task is to analyze the user's query and generate a valid JSON rule expression that can be evaluated by the rule engine.
+Your task is to analyze the user's query and generate a valid JSON RuleSet that can be evaluated by the rule engine.
 
-The rule expression should follow this structure:
+The RuleSet should follow this complete structure:
 {
-  "field": "path.to.field.in.context",
-  "operator": "one_of_the_supported_operators",
-  "value": "expected_value"
-}
-
-Supported operators include:
-- eq: equals
-- ne: not equals
-- lt: less than
-- le: less than or equal to
-- gt: greater than
-- ge: greater than or equal to
-- in: in a list
-- not_in: not in a list
-- contains: contains a substring
-- not_contains: does not contain a substring
-- startswith: starts with a substring
-- endswith: ends with a substring
-- regex: matches a regular expression
-- is_null: is null
-- is_not_null: is not null
-- is_empty: is empty
-- is_not_empty: is not empty
-
-For complex conditions, you can use logical operators:
-{
-  "and": [
-    { "field": "age", "operator": "gt", "value": 18 },
-    { "field": "status", "operator": "eq", "value": "active" }
-  ]
-}
-
-{
-  "or": [
-    { "field": "role", "operator": "eq", "value": "admin" },
-    { "field": "role", "operator": "eq", "value": "moderator" }
-  ]
-}
-
-{
-  "not": { "field": "deleted", "operator": "eq", "value": true }
-}
-
-For rule sets, the structure should be:
-{
+  "id": "unique_ruleset_id",
+  "target": "target_entity",
   "name": "Rule Set Name",
   "description": "Description of what this rule set does",
-  "target": "target_entity",
+  "applies_when": [
+    { "field": "request.field_name", "operator": "==", "value": "condition_value" }
+  ],
   "rules": [
     {
       "id": "unique_rule_id",
-      "expression": { ... rule expression ... },
+      "name": "Rule Name",
+      "type": "comparison",
+      "expression": "request.field <= value",
+      "message": "Message to display if this rule fails"
+    },
+    {
+      "id": "unique_rule_id",
+      "name": "Rule Name",
+      "type": "conditional",
+      "requires": [
+        {
+          "name": "external_data_name",
+          "source": "external_api",
+          "query": "GET `https://api.example.com/endpoint/{context.user_id}`",
+          "headers": { "Authorization": "Bearer ${env.API_TOKEN}" },
+          "transform": "data.field"
+        },
+        {
+          "name": "tool_data_name",
+          "source": "tool",
+          "tool": "tool_name",
+          "parameters": { "param1": "{{context.user_id}}" }
+        }
+      ],
+      "expression": "if(condition) true else false",
       "message": "Message to display if this rule fails"
     }
-  ]
+  ],
+  "on_fail": { "action": "block", "notify": ["user"] }
 }
+
+Supported rule types:
+- comparison: Simple comparison rules using expressions like "request.field <= value"
+- conditional: Complex rules that require external data or tool results
+
+Supported functions in expressions:
+- add_months(date, months): Add or subtract months from a date
+- add_days(date, days): Add or subtract days from a date
+- now(): Get the current date and time
 
 Always respond with valid JSON only, without any additional text or explanation.
 """
@@ -331,6 +324,9 @@ The rule set should include a name, description, and one or more rules.
             return self._create_default_ruleset("Invalid rule set", target)
         
         # Add default values for required fields
+        if 'id' not in ruleset:
+            ruleset['id'] = str(uuid.uuid4())
+        
         if 'name' not in ruleset:
             ruleset['name'] = "Generated Rule Set"
         
@@ -340,8 +336,14 @@ The rule set should include a name, description, and one or more rules.
         if 'target' not in ruleset:
             ruleset['target'] = target
         
+        if 'applies_when' not in ruleset or not isinstance(ruleset['applies_when'], list):
+            ruleset['applies_when'] = []
+        
         if 'rules' not in ruleset or not isinstance(ruleset['rules'], list):
             ruleset['rules'] = []
+        
+        if 'on_fail' not in ruleset or not isinstance(ruleset['on_fail'], dict):
+            ruleset['on_fail'] = { "action": "block", "notify": ["user"] }
         
         # Validate each rule
         for rule in ruleset['rules']:
@@ -351,11 +353,22 @@ The rule set should include a name, description, and one or more rules.
             if 'id' not in rule:
                 rule['id'] = str(uuid.uuid4())
             
+            if 'name' not in rule:
+                rule['name'] = f"Rule {rule['id'][:8]}"
+            
+            if 'type' not in rule:
+                # Default to comparison if expression is a string, otherwise conditional
+                rule['type'] = "comparison" if isinstance(rule.get('expression'), str) else "conditional"
+            
             if 'expression' not in rule:
-                rule['expression'] = self._create_default_rule("Missing expression")
+                rule['expression'] = "true"
             
             if 'message' not in rule:
                 rule['message'] = "Rule validation failed"
+            
+            # Add requires if it's a conditional rule and not present
+            if rule['type'] == "conditional" and 'requires' not in rule:
+                rule['requires'] = []
         
         return ruleset
     
@@ -393,17 +406,17 @@ The rule set should include a name, description, and one or more rules.
             "name": "Generated Rule Set",
             "description": f"Rule set generated from query: {query}",
             "target": target,
+            "applies_when": [],
             "rules": [
                 {
                     "id": str(uuid.uuid4()),
-                    "expression": {
-                        "field": "query",
-                        "operator": "contains",
-                        "value": query[:50]  # Truncate if too long
-                    },
+                    "name": "Default Comparison Rule",
+                    "type": "comparison",
+                    "expression": f"request.query contains '{query[:50]}'",
                     "message": "Default rule validation failed"
                 }
-            ]
+            ],
+            "on_fail": { "action": "block", "notify": ["user"] }
         }
 
 

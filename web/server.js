@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DIFY_BACKEND_URL = process.env.DIFY_BACKEND_URL || 'http://localhost:5001';
+const DIFY_BACKEND_URL = process.env.DIFY_BACKEND_URL || 'http://localhost:3001';
 
 // 解析JSON请求体
 app.use(express.json());
@@ -21,12 +21,23 @@ app.use(express.static(path.join(__dirname, 'dist')));
 app.post(/^\/api\//, async (req, res) => {
   try {
     const apiPath = req.originalUrl.replace(/^\/api\//, '');
-    const response = await axios.post(`${DIFY_BACKEND_URL}/${apiPath}`, req.body);
+    const targetUrl = `${DIFY_BACKEND_URL}/${apiPath}`;
+    console.log('Proxying request to:', targetUrl);
+    console.log('Request body:', req.body);
+    const response = await axios.post(targetUrl, req.body, {
+      headers: { ...req.headers, host: new URL(targetUrl).host }
+    });
+    console.log('Proxy response:', response.data);
     res.json(response.data);
   } catch (error) {
-    console.error('API代理错误:', error);
-    res.status(500).json({ error: 'API请求失败' });
-  }
+      console.error('API代理错误:', error);
+      console.error('API代理错误详情:', error.stack);
+      if (error.response) {
+        console.error('错误响应状态:', error.response.status);
+        console.error('错误响应数据:', error.response.data);
+      }
+      res.status(500).json({ error: 'API请求失败', message: error.message, stack: error.stack });
+    }
 });
 
 // 所有其他路由都返回React应用的入口文件

@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 from dify_plugin import Tool
 
-from provider.llm_query_parser import parse_query_to_rule
+from provider.llm_query_parser import parse_query_to_ruleset
 
 
 class GenerateRuleFromQuery(Tool):
@@ -41,8 +41,8 @@ class GenerateRuleFromQuery(Tool):
             # Get LLM invoker from session
             llm_invoker = self.session.model_invoker
             
-            # Parse query to rule
-            rule = parse_query_to_rule(query, context, llm_invoker)
+            # Parse query to rule set
+            rule = parse_query_to_ruleset(query, context, llm_invoker=llm_invoker)
             
             return {
                 "success": True,

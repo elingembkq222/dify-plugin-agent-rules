@@ -1,28 +1,46 @@
 import { useState } from 'react';
-import { Form, Input, Select, Button, message } from 'antd';
+import { Form, Input, Button, message, Card } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { addRule } from '../api';
+import { addRule, generateRule } from '../api';
 
 const { TextArea } = Input;
 
 const AddRule = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [generatedResult, setGeneratedResult] = useState(null);
 
   const onFinish = (values) => {
     setLoading(true);
-    addRule(values)
-      .then(response => {
-        message.success('规则添加成功');
+    // First generate the rule set from natural language query
+    generateRule(values)
+      .then(generateResponse => {
+        const generatedResult = generateResponse.data;
+        const generatedRuleset = generatedResult.rule || generatedResult;
+        setGeneratedResult(generatedRuleset);
+        // Then save the generated rule set
+        return addRule(generatedRuleset);
+      })
+      .then(addResponse => {
+        message.success('规则生成并添加成功');
         form.resetFields();
+        setGeneratedResult(null);
       })
       .catch(error => {
-        message.error('添加规则失败');
-        console.error('添加规则失败:', error);
+        message.error('规则生成或添加失败');
+        console.error('规则生成或添加失败:', error);
       })
       .finally(() => {
         setLoading(false);
       });
+  };
+
+  const handleCopy = () => {
+    if (generatedResult) {
+      navigator.clipboard.writeText(JSON.stringify(generatedResult, null, 2))
+        .then(() => message.success('生成的规则已复制到剪贴板'))
+        .catch(() => message.error('复制失败'));
+    }
   };
 
   return (
@@ -35,50 +53,29 @@ const AddRule = () => {
         className="add-rule-form"
       >
         <Form.Item
-          name="name"
-          label="规则集名称"
-          rules={[{ required: true, message: '请输入规则集名称' }]}
+          name="query"
+          label="自然语言查询"
+          rules={[{ required: true, message: '请输入自然语言查询' }]}
         >
-          <Input placeholder="输入规则集名称" />
+          <TextArea
+            placeholder="例如: 添加生日假规则，员工生日前后一个月内可休1天，试用期员工需在转正后一个月内使用"
+            rows={6}
+            className="rule-function-textarea"
+          />
         </Form.Item>
 
         <Form.Item
-          name="type"
-          label="规则类型"
-          rules={[{ required: true, message: '请选择规则类型' }]}
+          name="name"
+          label="规则集名称 (可选)"
         >
-          <Select placeholder="选择规则类型">
-            <Select.Option value="function">函数规则</Select.Option>
-            <Select.Option value="regex">正则规则</Select.Option>
-            <Select.Option value="template">模板规则</Select.Option>
-          </Select>
+          <Input placeholder="输入规则集名称 (可选，生成时会自动生成)" />
         </Form.Item>
 
         <Form.Item
           name="target"
-          label="目标"
-          rules={[{ required: true, message: '请输入目标' }]}
+          label="目标 (可选)"
         >
-          <Input placeholder="输入目标" />
-        </Form.Item>
-
-        <Form.Item
-          name="description"
-          label="规则描述"
-        >
-          <Input placeholder="输入规则描述" />
-        </Form.Item>
-
-        <Form.Item
-          name="function"
-          label="规则函数"
-          rules={[{ required: true, message: '请输入规则函数' }]}
-        >
-          <TextArea
-            placeholder="输入规则函数 (Python代码)"
-            rows={8}
-            className="rule-function-textarea"
-          />
+          <Input placeholder="输入目标 (可选，如: leave_apply)" />
         </Form.Item>
 
         <Form.Item>
@@ -89,10 +86,24 @@ const AddRule = () => {
             icon={<PlusOutlined />}
             block
           >
-            添加规则
+            生成并添加规则
           </Button>
         </Form.Item>
       </Form>
+
+      {generatedResult && (
+        <Card title="生成的规则集" bordered={false} className="result-card">
+          <pre>{JSON.stringify(generatedResult, null, 2)}</pre>
+          <Button
+            type="default"
+            onClick={handleCopy}
+            disabled={!generatedResult}
+            className="copy-btn"
+          >
+            复制规则
+          </Button>
+        </Card>
+      )}
     </div>
   );
 };
