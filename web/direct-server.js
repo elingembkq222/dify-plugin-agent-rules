@@ -52,60 +52,86 @@ print(json.dumps(result, ensure_ascii=False));`
   });
 });
 
-// Add a new rule endpoint
 app.post('/api/add_rule', (req, res) => {
-  // Accept both formats: rule data directly in body or nested under 'rule' key
-  const rule_data = req.body.rule || req.body;
-  
-  if (!rule_data || !rule_data.target || !rule_data.name || !rule_data.rules) {
-    return res.status(400).json({ error: 'Missing required fields: target, name, rules' });
+  let rule_raw;
+
+  // 自动识别格式
+  if (req.body?.result?.rule) {
+    rule_raw = req.body.result.rule;
+  } else if (req.body?.rule) {
+    rule_raw = req.body.rule;
+  } else {
+    rule_raw = req.body;
   }
 
-  // Convert the rule data to a JSON string that can be passed to Python
-  const rule_json = JSON.stringify(rule_data).replace(/'/g, "\\'");
+  // 校验
+  if (!rule_raw || !rule_raw.id || !rule_raw.target || !rule_raw.name || !rule_raw.rules) {
+    return res.status(400).json({
+      error: 'Missing required fields: id, target, name, rules',
+      received: rule_raw
+    });
+  }
 
-  // Use Python to add the rule
+  // 构造数据库结构（保持与 MySQL x_rule_sets 字段一致）
+  const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+  const rule_data = {
+    id: rule_raw.id,
+    target: rule_raw.target,
+    name: rule_raw.name,
+    description: rule_raw.description ?? null,
+    applies_when: rule_raw.applies_when ?? null,
+    rules: rule_raw.rules,
+    on_fail: rule_raw.on_fail ?? null,
+    created_at: now,
+    updated_at: now
+  };
+
+  console.log("Prepared rule_data:", rule_data);
+
+  // Python 直接接收 JSON，不做任何转义处理
   const pythonProcess = spawn('python3', [
     '-c',
-    `import json;
-import os;
-from dotenv import load_dotenv;
-from provider.rule_storage import add_rule_set, init_rule_db;
-# Load environment variables
-load_dotenv();
-# Initialize database
-init_rule_db(os.getenv('RULE_DB_URL', 'sqlite:///rule_engine.db'));
-result = add_rule_set(${rule_json});
-print(json.dumps({ "success": True, "ruleset_id": result }, ensure_ascii=False));`
+    `
+import json, os
+from dotenv import load_dotenv
+from provider.rule_storage import add_rule_set, init_rule_db
+
+load_dotenv()
+init_rule_db(os.getenv('RULE_DB_URL', 'sqlite:///rule_engine.db'))
+
+rule_data = json.loads("""${JSON.stringify(rule_data)}""")
+result = add_rule_set(rule_data)
+
+print(json.dumps({
+  "success": True,
+  "ruleset_id": rule_data["id"]
+}, ensure_ascii=False))
+    `
   ], { cwd: '../' });
 
   let output = '';
   let error = '';
 
-  pythonProcess.stdout.on('data', (data) => {
-    output += data.toString();
-  });
-
-  pythonProcess.stderr.on('data', (data) => {
-    error += data.toString();
-  });
+  pythonProcess.stdout.on('data', (d) => { output += d.toString(); });
+  pythonProcess.stderr.on('data', (d) => { error += d.toString(); });
 
   pythonProcess.on('close', (code) => {
     if (code !== 0) {
-      console.error('Python error:', error);
-      return res.status(500).json({ error: 'Failed to add rule', message: error });
+      console.error("Python error:", error);
+      return res.status(500).json({ error: "Python failed", detail: error });
     }
 
     try {
-      const result = JSON.parse(output);
-      res.json(result);
-    } catch (err) {
-      console.error('JSON parse error:', err);
-      console.error('Raw output:', output);
-      res.status(500).json({ error: 'Failed to parse add rule result', message: err.message });
+      res.json(JSON.parse(output));
+    } catch (e) {
+      console.error("JSON parse error:", output);
+      res.status(500).json({ error: "Invalid JSON from Python", output });
     }
   });
 });
+
+
 
 // List all rules endpoint
 app.get('/api/list_rules', (req, res) => {
