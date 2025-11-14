@@ -14,6 +14,22 @@ from sqlalchemy import create_engine, Column, String, JSON, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
+def is_valid_uuid(uuid_str):
+    """
+    Validate if a string is a valid UUID.
+    
+    Args:
+        uuid_str: String to validate as UUID
+        
+    Returns:
+        True if valid UUID, False otherwise
+    """
+    try:
+        uuid.UUID(uuid_str)
+        return True
+    except ValueError:
+        return False
+
 # Global variables for database connection
 engine = None
 SessionLocal = None
@@ -86,10 +102,26 @@ def add_rule_set(rule_data: Dict[str, Any]) -> str:
     Returns:
         ID of the created rule set
     """
+    # Validate ruleset ID if provided
+    if "id" in rule_data:
+        if not is_valid_uuid(rule_data["id"]):
+            raise ValueError(f"Invalid UUID format for ruleset ID: {rule_data['id']}. Please use a valid UUID.")
+    
+    # Validate and/or generate rule IDs
+    rules = rule_data.get("rules", [])
+    for rule in rules:
+        if "id" in rule:
+            if not is_valid_uuid(rule["id"]):
+                raise ValueError(f"Invalid UUID format for rule ID: {rule['id']}. Please use a valid UUID.")
+        else:
+            # Generate UUID if not provided
+            rule["id"] = str(uuid.uuid4())
+    
     db = get_db()
     try:
         # Create new rule set
         rule_set = RuleSet(
+            id=rule_data.get("id"),  # Allow custom UUID if provided and valid
             target=rule_data.get("target", "default"),
             name=rule_data.get("name", ""),
             description=rule_data.get("description", ""),
@@ -117,6 +149,10 @@ def get_rule_set(rule_set_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Rule set data as dictionary, or None if not found
     """
+    # Validate ruleset ID
+    if not is_valid_uuid(rule_set_id):
+        raise ValueError(f"Invalid UUID format for ruleset ID: {rule_set_id}. Please use a valid UUID.")
+    
     db = get_db()
     try:
         rule_set = db.query(RuleSet).filter(RuleSet.id == rule_set_id).first()
@@ -207,6 +243,20 @@ def update_rule_set(rule_set_id: str, rule_data: Dict[str, Any]) -> bool:
     Returns:
         True if update was successful, False otherwise
     """
+    # Validate ruleset ID
+    if not is_valid_uuid(rule_set_id):
+        raise ValueError(f"Invalid UUID format for ruleset ID: {rule_set_id}. Please use a valid UUID.")
+    
+    # Validate and/or generate rule IDs if rules are provided
+    if "rules" in rule_data:
+        for rule in rule_data["rules"]:
+            if "id" in rule:
+                if not is_valid_uuid(rule["id"]):
+                    raise ValueError(f"Invalid UUID format for rule ID: {rule['id']}. Please use a valid UUID.")
+            else:
+                # Generate UUID if not provided
+                rule["id"] = str(uuid.uuid4())
+    
     db = get_db()
     try:
         rule_set = db.query(RuleSet).filter(RuleSet.id == rule_set_id).first()
@@ -245,6 +295,10 @@ def delete_rule_set(rule_set_id: str) -> bool:
     Returns:
         True if deletion was successful, False otherwise
     """
+    # Validate ruleset ID
+    if not is_valid_uuid(rule_set_id):
+        raise ValueError(f"Invalid UUID format for ruleset ID: {rule_set_id}. Please use a valid UUID.")
+    
     db = get_db()
     try:
         rule_set = db.query(RuleSet).filter(RuleSet.id == rule_set_id).first()

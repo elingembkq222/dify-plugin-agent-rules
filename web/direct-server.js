@@ -54,7 +54,8 @@ print(json.dumps(result, ensure_ascii=False));`
 
 // Add a new rule endpoint
 app.post('/api/add_rule', (req, res) => {
-  const rule_data = req.body;
+  // Accept both formats: rule data directly in body or nested under 'rule' key
+  const rule_data = req.body.rule || req.body;
   
   if (!rule_data || !rule_data.target || !rule_data.name || !rule_data.rules) {
     return res.status(400).json({ error: 'Missing required fields: target, name, rules' });

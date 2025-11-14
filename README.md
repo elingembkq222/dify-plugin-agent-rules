@@ -141,6 +141,42 @@
 }
 ```
 
+## 测试
+
+项目包含完整的测试用例，确保功能的正确性和稳定性。
+
+### 测试依赖
+
+在运行测试之前，需要安装测试依赖：
+
+```bash
+pip install pytest
+```
+
+### 运行测试
+
+运行所有测试用例：
+
+```bash
+pytest tests/
+```
+
+运行特定测试文件：
+
+```bash
+pytest tests/test_api.py
+pytest tests/test_generate_rule.py
+pytest tests/test_uuid_generation.py
+pytest tests/test_uuid_validation.py
+```
+
+### 测试文件说明
+
+- `test_api.py`: API 功能测试
+- `test_generate_rule.py`: 规则生成功能测试
+- `test_uuid_generation.py`: UUID 生成功能测试
+- `test_uuid_validation.py`: UUID 验证功能测试
+
 ## 开发和贡献
 
 欢迎提交 Issue 和 Pull Request 来改进这个插件。

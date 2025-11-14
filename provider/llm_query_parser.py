@@ -334,9 +334,8 @@ The rule set should include a name, description, and one or more rules.
         if not isinstance(ruleset, dict):
             return self._create_default_ruleset("Invalid rule set", target)
         
-        # Add default values for required fields
-        if 'id' not in ruleset:
-            ruleset['id'] = str(uuid.uuid4())
+        # Always generate a UUID for the ruleset
+        ruleset['id'] = str(uuid.uuid4())
         
         if 'name' not in ruleset:
             ruleset['name'] = "Generated Rule Set"
@@ -361,8 +360,8 @@ The rule set should include a name, description, and one or more rules.
             if not isinstance(rule, dict):
                 continue
                 
-            if 'id' not in rule:
-                rule['id'] = str(uuid.uuid4())
+            # Always generate a UUID for each rule
+            rule['id'] = str(uuid.uuid4())
             
             if 'name' not in rule:
                 rule['name'] = f"Rule {rule['id'][:8]}"

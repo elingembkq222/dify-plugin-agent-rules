@@ -1,6 +1,11 @@
-import json
+import sys
 import os
+import json
 from dotenv import load_dotenv
+
+# Add the root directory to sys.path so that 'provider' package can be imported
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from provider.llm_query_parser import parse_query_to_ruleset
 
 # Load environment variables
