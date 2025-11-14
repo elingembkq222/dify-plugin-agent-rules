@@ -232,20 +232,20 @@ def list_all_rule_sets() -> List[Dict[str, Any]]:
         db.close()
 
 
-def update_rule_set(rule_set_id: str, rule_data: Dict[str, Any]) -> bool:
+def update_rule_set(rule_data: Dict[str, Any]) -> bool:
     """
     Update an existing rule set.
     
     Args:
-        rule_set_id: ID of the rule set to update
-        rule_data: Updated rule set data
+        rule_data: Updated rule set data (must include id)
         
     Returns:
         True if update was successful, False otherwise
     """
     # Validate ruleset ID
-    if not is_valid_uuid(rule_set_id):
-        raise ValueError(f"Invalid UUID format for ruleset ID: {rule_set_id}. Please use a valid UUID.")
+    rule_set_id = rule_data.get("id")
+    if not rule_set_id or not is_valid_uuid(rule_set_id):
+        raise ValueError(f"Invalid or missing UUID format for ruleset ID: {rule_set_id}. Please use a valid UUID.")
     
     # Validate and/or generate rule IDs if rules are provided
     if "rules" in rule_data:

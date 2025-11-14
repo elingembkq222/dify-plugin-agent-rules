@@ -46,4 +46,8 @@ export const generateRule = (queryData) => {
   return axiosInstance.post('/generate_rule_from_query', queryData);
 };
 
+export const updateRule = (ruleData) => {
+  return axiosInstance.post('/update_rule', ruleData);
+};
+
 export default axiosInstance;

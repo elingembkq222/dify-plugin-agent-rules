@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, message } from 'antd';
-import { EditOutlined, DeleteOutlined, ReloadOutlined, CopyOutlined } from '@ant-design/icons';
-import { listRules } from '../api';
+import { Table, Button, Space, Tag, message, Collapse } from 'antd';
+import { EditOutlined, DeleteOutlined, ReloadOutlined, CopyOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { listRules, updateRule } from '../api';
+import RuleExecutionList from './RuleExecutionList';
+
+const { Panel } = Collapse;
 
 const RulesList = () => {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [expandedRuleId, setExpandedRuleId] = useState(null);
 
   const fetchRules = () => {
     setLoading(true);
     listRules()
       .then(response => {
-        setRules(response.data.rules);
+        setRules(response.data.rulesets || response.data.rules || []);
         message.success('规则列表加载成功');
       })
       .catch(error => {
@@ -46,6 +50,26 @@ const RulesList = () => {
       message.error('复制失败');
       console.error('复制失败:', error);
     }
+  };
+
+  const handleViewExecutionList = (ruleId) => {
+    if (expandedRuleId === ruleId) {
+      setExpandedRuleId(null);
+    } else {
+      setExpandedRuleId(ruleId);
+    }
+  };
+
+  const handleUpdateRule = (ruleSetId, ruleData) => {
+    // 更新规则集信息
+    const existingRuleSet = rules.find(r => r.id === ruleSetId);
+    if (!existingRuleSet) return;
+    const updatedRuleSet = { ...existingRuleSet, rules: ruleData };
+    // 更新本地规则列表
+    const updatedRules = rules.map(rule => rule.id === ruleSetId ? updatedRuleSet : rule);
+    setRules(updatedRules);
+    // 收起面板
+    setExpandedRuleId(null);
   };
 
   const columns = [
@@ -90,18 +114,35 @@ const RulesList = () => {
       key: 'updated_at',
       ellipsis: true,
     },
-    {title: '操作',
+    {
+      title: '操作',
       key: 'action',
-      width: 330,
+      width: 420,
       render: (_, record) => (
         <Space size="small">
           <Button
             type="primary"
             size="small"
+            icon={<UnorderedListOutlined />}
+            onClick={() => handleViewExecutionList(record.id)}
+          >
+            执行规则列表
+          </Button>
+          <Button
+            type="default"
+            size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            编辑规则集
+          </Button>
+          <Button
+            type="default"
+            size="small"
+            icon={<CopyOutlined />}
+            onClick={() => handleCopy(record)}
+          >
+            复制JSON
           </Button>
           <Button
             danger
@@ -111,46 +152,48 @@ const RulesList = () => {
           >
             删除
           </Button>
-          <Button
-            size="small"
-            icon={<CopyOutlined />}
-            onClick={() => handleCopy(record)}
-          >
-            复制
-          </Button>
         </Space>
       ),
     },
   ];
 
   return (
-    <div className="rules-list">
-      <div className="rules-list-header">
+    <div>
+      <div style={{ marginBottom: 16 }}>
         <Button
           type="primary"
           icon={<ReloadOutlined />}
           onClick={fetchRules}
           loading={loading}
-          className="reload-btn"
         >
-          刷新列表
+          刷新规则列表
         </Button>
       </div>
-
       <Table
-        columns={columns}
         dataSource={rules}
+        columns={columns}
         rowKey="id"
-        loading={loading}
         bordered
         size="middle"
-        scroll={{ x: 1350 }}
-        pagination={{
-          pageSize: 10,
-          showSizeChanger: true,
-          showTotal: (total) => `共 ${total} 条规则`,
-        }}
+        pagination={{ pageSize: 10 }}
       />
+
+      {/* 展开面板显示规则执行列表 */}
+      <div style={{ marginTop: 16 }}>
+        {expandedRuleId && (
+          <Collapse defaultActiveKey={[expandedRuleId]} ghost>
+            <Panel
+              header={`执行规则列表 - ${rules.find(r => r.id === expandedRuleId)?.name || expandedRuleId}`}
+              key={expandedRuleId}
+            >
+              <RuleExecutionList
+                ruleSet={rules.find(r => r.id === expandedRuleId)}
+                onUpdate={handleUpdateRule}
+              />
+            </Panel>
+          </Collapse>
+        )}
+      </div>
     </div>
   );
 };
