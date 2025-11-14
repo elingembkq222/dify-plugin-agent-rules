@@ -18,19 +18,26 @@ class ValidateRuleset(Tool):
     Validate Ruleset Tool
     """
     
-    def run(self, ruleset_id: str, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run(self, ruleset_id: str, context: Dict[str, Any], rule_db_url: str, business_db_url: str, demo: str, **kwargs) -> Dict[str, Any]:
         """
         Validate user input using the rule engine.
         
         Args:
             ruleset_id: ID of the ruleset to validate against
             context: Context data to validate
+            rule_db_url: Rule database connection URL
+            business_db_url: Business database connection URL
+            demo: Demo parameter in a format similar to MySQL connection string
             **kwargs: Additional keyword arguments
             
         Returns:
             Validation result
         """
         try:
+            # Initialize rule database
+            from provider.rule_storage import init_rule_db
+            init_rule_db(rule_db_url)
+            
             # Parse context if it's a string
             if isinstance(context, str):
                 context = json.loads(context)
@@ -80,5 +87,26 @@ class ValidateRuleset(Tool):
                 "label": "Context Data",
                 "human_description": "Context data to validate",
                 "description": "Context data to validate"
+            },
+            "rule_db_url": {
+                "type": "string",
+                "required": True,
+                "label": "Rule Database URL",
+                "human_description": "Rule database connection URL (e.g., mysql+pymysql://root:password@localhost:3306/agent_rules?charset=utf8mb4)",
+                "description": "Rule database connection URL for storing rules"
+            },
+            "business_db_url": {
+                "type": "string",
+                "required": True,
+                "label": "Business Database URL",
+                "human_description": "Business database connection URL (e.g., mysql+pymysql://root:password@localhost:3306/business_data?charset=utf8mb4)",
+                "description": "Business database connection URL for accessing external data"
+            },
+            "demo": {
+                "type": "string",
+                "required": True,
+                "label": "Demo Parameter",
+                "human_description": "Demo parameter in a format similar to MySQL connection string",
+                "description": "Demo parameter for testing purposes"
             }
         }

@@ -12,6 +12,36 @@ description:
   llm: List all available rule sets in the rule engine
 
 parameters:
+  - name: rule_db_url
+    type: string
+    required: true
+    label:
+      en_US: Rule Database Link
+      zh_Hans: 规则数据库链接
+    form: llm
+    human_description:
+      en_US: URL for connecting to the rule database
+      zh_Hans: 用于连接规则数据库的URL
+  - name: business_db_url
+    type: string
+    required: true
+    label:
+      en_US: Business Database Link
+      zh_Hans: 业务数据库链接
+    form: llm
+    human_description:
+      en_US: URL for connecting to the business database
+      zh_Hans: 用于连接业务数据库的URL
+  - name: demo
+    type: string
+    required: true
+    label:
+      en_US: Demo Parameter
+      zh_Hans: 演示参数
+    form: llm
+    human_description:
+      en_US: Demo parameter for testing purposes
+      zh_Hans: 用于测试目的的演示参数
   - name: target
     type: string
     required: false

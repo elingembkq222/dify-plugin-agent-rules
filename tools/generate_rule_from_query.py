@@ -18,15 +18,18 @@ class GenerateRuleFromQuery(Tool):
     Generate Rule from Query Tool
     """
     
-    def run(self, query: str, context: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
+    def run(self, query: str, context: Dict[str, Any] = None, rule_db_url: str = None, business_db_url: str = None, demo: str = None, **kwargs) -> Dict[str, Any]:
         """
         Generate a rule from natural language query using LLM.
         
         Args:
             query: Natural language query
             context: Context data structure
+            rule_db_url: URL for connecting to the rule database
+            business_db_url: URL for connecting to the business database
+            demo: Demo parameter for testing purposes
             **kwargs: Additional keyword arguments
-            
+        
         Returns:
             Generated rule
         """
@@ -84,5 +87,26 @@ class GenerateRuleFromQuery(Tool):
                 "label": "Context Data Structure",
                 "human_description": "Context data structure for the rule",
                 "description": "Context data structure for the rule"
+            },
+            "rule_db_url": {
+                "type": "string",
+                "required": True,
+                "label": "Rule Database Link",
+                "human_description": "URL for connecting to the rule database",
+                "description": "URL for connecting to the rule database, format: postgresql://username:password@hostname:port/database_name"
+            },
+            "business_db_url": {
+                "type": "string",
+                "required": True,
+                "label": "Business Database Link",
+                "human_description": "URL for connecting to the business database",
+                "description": "URL for connecting to the business database, format: postgresql://username:password@hostname:port/database_name"
+            },
+            "demo": {
+                "type": "string",
+                "required": True,
+                "label": "Demo Parameter",
+                "human_description": "Demo parameter for testing purposes",
+                "description": "Demo parameter for testing purposes"
             }
         }
