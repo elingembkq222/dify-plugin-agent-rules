@@ -1,12 +1,30 @@
 """
-Data Resolver Module
+数据解析器模块
 
-This module provides functionality to resolve data from various sources,
-including databases, APIs, and context data.
+该模块负责根据规则配置解析和获取数据，支持多种数据源：
+1. 本地数据源 (local)
+2. 数据库数据源 (db)
+3. 上下文数据源 (context)
+4. API数据源 (api)
+5. 数据库查询数据源 (database)
+6. 静态数据源 (static)
 """
 
 import json
+import os
 import sqlite3
+from typing import Any, Dict, List, Optional, Union
+
+# 导入错误处理模块
+from .error_handler import (
+    ErrorType,
+    handle_exception,
+    create_database_error_response,
+    create_database_connection_error_response,
+    create_database_table_not_found_response,
+    create_sql_syntax_error_response
+)
+
 import urllib.request
 import urllib.parse
 from typing import Any, Dict, List, Optional, Union
@@ -291,20 +309,43 @@ class DataResolver:
                 result = self._query_mysql(query, db_url)
                 return result
             else:
-                raise ValueError(f"Unsupported database type: {db_type}")
+                error_response = create_database_error_response(
+                    message=f"不支持的数据库类型: {db_type}",
+                    context={"db_type": db_type, "query": query, "db_url": db_url}
+                )
+                raise Exception(error_response.to_json())
         except Exception as e:
             # Re-raise the exception to make database errors visible
-            error_msg = f"Error resolving from database: {e}"
+            error_msg = str(e)
             
-            # Add more context for database errors
-            if "no such table" in str(e).lower():
-                error_msg = f"数据库表不存在错误: {e}"
-            elif "connection" in str(e).lower():
-                error_msg = f"数据库连接错误: {e}"
-            elif "syntax error" in str(e).lower():
-                error_msg = f"SQL语法错误: {e}"
+            # 检查是否已经是JSON格式的错误（避免重复封装）
+            if error_msg.startswith('{') and error_msg.endswith('}'):
+                # 已经是JSON格式，直接抛出
+                raise e
             
-            raise Exception(error_msg) from e
+            # 封装为JSON格式错误
+            if "no such table" in error_msg.lower():
+                error_response = create_database_table_not_found_response(
+                    message=f"数据库表不存在错误: {error_msg}",
+                    context={"db_type": db_type, "query": query, "db_url": db_url}
+                )
+            elif "connection" in error_msg.lower() or "can't connect" in error_msg.lower():
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: {error_msg}",
+                    context={"db_type": db_type, "query": query, "db_url": db_url}
+                )
+            elif "syntax error" in error_msg.lower():
+                error_response = create_sql_syntax_error_response(
+                    message=f"SQL语法错误: {error_msg}",
+                    context={"db_type": db_type, "query": query, "db_url": db_url}
+                )
+            else:
+                error_response = create_database_error_response(
+                    message=f"数据库错误: {error_msg}",
+                    context={"db_type": db_type, "query": query, "db_url": db_url}
+                )
+            
+            raise Exception(error_response.to_json()) from e
     
     def _query_sqlite(self, query: str, db_url: Optional[str] = None) -> Any:
         """
@@ -326,14 +367,16 @@ class DataResolver:
             # Default to SQLite database
             db_path = "rule_engine.db"
         
-        # Debug: Print the db_path
-        print(f"DEBUG: SQLite db_path = {db_path}")
-        
         # Check if database file exists
         import os
         if not os.path.exists(db_path):
-            print(f"DEBUG: Database file does not exist: {db_path}")
-            raise Exception(f"数据库连接错误: 数据库文件不存在: {db_path}")
+            # 创建统一的数据库连接错误响应
+            error_response = create_database_connection_error_response(
+                message=f"数据库连接错误: 数据库文件不存在: {db_path}",
+                context={"db_path": db_path, "query": query}
+            )
+            # 抛出异常，包含JSON格式的错误信息
+            raise Exception(error_response.to_json())
         
         try:
             conn = sqlite3.connect(db_path)
@@ -373,27 +416,56 @@ class DataResolver:
         except sqlite3.Error as e:
             # Handle SQLite specific errors
             error_msg = str(e)
-            print(f"DEBUG: SQLite error: {error_msg}")
             
             # Check for table not found error
             if "no such table" in error_msg.lower():
-                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+                error_response = create_database_table_not_found_response(
+                    message=f"数据库表不存在错误: {error_msg}",
+                    context={"db_path": db_path, "query": query}
+                )
             # Check for database connection errors
             elif "unable to open database file" in error_msg.lower():
-                raise Exception(f"数据库连接错误: 无法打开数据库文件: {db_path}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: 无法打开数据库文件: {db_path}",
+                    context={"db_path": db_path, "query": query}
+                )
             # Check for permission errors
             elif "permission denied" in error_msg.lower():
-                raise Exception(f"数据库连接错误: 权限不足，无法访问数据库文件: {db_path}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: 权限不足，无法访问数据库文件: {db_path}",
+                    context={"db_path": db_path, "query": query}
+                )
             # General database error
             else:
-                raise Exception(f"数据库错误: {error_msg}") from e
+                error_response = create_database_error_response(
+                    message=f"数据库错误: {error_msg}",
+                    context={"db_path": db_path, "query": query}
+                )
+            
+            # 抛出异常，包含JSON格式的错误信息
+            raise Exception(error_response.to_json()) from e
         except Exception as e:
             # Handle other exceptions
-            print(f"DEBUG: General exception: {str(e)}")
-            if "no such table" in str(e).lower():
-                raise Exception(f"数据库表不存在错误: {e}") from e
+            error_msg = str(e)
+            
+            # 检查是否已经是JSON格式的错误（避免重复封装）
+            if error_msg.startswith('{') and error_msg.endswith('}'):
+                # 已经是JSON格式，直接抛出
+                raise e
+            
+            if "no such table" in error_msg.lower():
+                error_response = create_database_table_not_found_response(
+                    message=f"数据库表不存在错误: {error_msg}",
+                    context={"db_path": db_path, "query": query}
+                )
             else:
-                raise Exception(f"数据库错误: {e}") from e
+                error_response = create_database_error_response(
+                    message=f"数据库错误: {error_msg}",
+                    context={"db_path": db_path, "query": query}
+                )
+            
+            # 抛出异常，包含JSON格式的错误信息
+            raise Exception(error_response.to_json()) from e
     
     def _query_postgresql(self, query: str, db_url: Optional[str] = None) -> Any:
         """
@@ -412,7 +484,11 @@ class DataResolver:
         # Use the provided db_url or fall back to business database URL
         connection_url = db_url if db_url else self.business_db_url
         if not connection_url:
-            raise ValueError("No database URL provided for PostgreSQL connection")
+            error_response = create_database_connection_error_response(
+                message="No database URL provided for PostgreSQL connection",
+                context={"query": query}
+            )
+            raise Exception(error_response.to_json())
         
         try:
             # Add connection timeout to avoid hanging
@@ -443,31 +519,70 @@ class DataResolver:
             
             # Table doesn't exist error (PostgreSQL error code 42P01)
             if error_code == '42P01' or "relation" in error_msg.lower() and "does not exist" in error_msg.lower():
-                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+                error_response = create_database_table_not_found_response(
+                    message=f"数据库表不存在错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Connection errors
             elif "connection" in error_msg.lower() or "could not connect" in error_msg.lower() or "timeout" in error_msg.lower():
-                raise Exception(f"数据库连接错误: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Database doesn't exist error (PostgreSQL error code 08006)
             elif error_code == '08006' or "database" in error_msg.lower() and "does not exist" in error_msg.lower():
-                raise Exception(f"数据库连接错误: 数据库不存在: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: 数据库不存在: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Authentication error (PostgreSQL error code 28P01)
             elif error_code == '28P01' or "password authentication failed" in error_msg.lower():
-                raise Exception(f"数据库连接错误: 认证失败: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: 认证失败: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Syntax errors (PostgreSQL error code 42601)
             elif error_code == '42601' or "syntax error" in error_msg.lower():
-                raise Exception(f"SQL语法错误: {error_msg}") from e
+                error_response = create_sql_syntax_error_response(
+                    message=f"SQL语法错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Other PostgreSQL errors
             else:
-                raise Exception(f"数据库错误: {error_msg}") from e
+                error_response = create_database_error_response(
+                    message=f"数据库错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
+            
+            # 抛出异常，包含JSON格式的错误信息
+            raise Exception(error_response.to_json()) from e
         except Exception as e:
             # Handle other exceptions
             error_msg = str(e)
+            
+            # 检查是否已经是JSON格式的错误（避免重复封装）
+            if error_msg.startswith('{') and error_msg.endswith('}'):
+                # 已经是JSON格式，直接抛出
+                raise e
+                
             if "no such table" in error_msg.lower() or "relation" in error_msg.lower() and "does not exist" in error_msg.lower():
-                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+                error_response = create_database_table_not_found_response(
+                    message=f"数据库表不存在错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query}
+                )
             elif "connection" in error_msg.lower() or "could not connect" in error_msg.lower():
-                raise Exception(f"数据库连接错误: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query}
+                )
             else:
-                raise Exception(f"数据库错误: {error_msg}") from e
+                error_response = create_database_error_response(
+                    message=f"数据库错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query}
+                )
+            
+            # 抛出异常，包含JSON格式的错误信息
+            raise Exception(error_response.to_json()) from e
     
     def _query_mysql(self, query: str, db_url: Optional[str] = None) -> Any:
         """
@@ -488,7 +603,11 @@ class DataResolver:
         # Use the provided db_url or fall back to business database URL
         connection_url = db_url if db_url else self.business_db_url
         if not connection_url:
-            raise ValueError("No database URL provided for MySQL connection")
+            error_response = create_database_connection_error_response(
+                message="No database URL provided for MySQL connection",
+                context={"query": query}
+            )
+            raise Exception(error_response.to_json())
         
         try:
             # Convert SQLAlchemy URL to pymysql compatible format
@@ -540,31 +659,70 @@ class DataResolver:
             
             # Table doesn't exist error (MySQL error code 1146)
             if error_code == 1146 or "no such table" in error_msg.lower() or "table" in error_msg.lower() and "doesn't exist" in error_msg.lower():
-                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+                error_response = create_database_table_not_found_response(
+                    message=f"数据库表不存在错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Connection errors (MySQL error codes in 2000s)
             elif error_code >= 2000 or "connection" in error_msg.lower() or "can't connect" in error_msg.lower() or "access denied" in error_msg.lower() or "timeout" in error_msg.lower():
-                raise Exception(f"数据库连接错误: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Syntax errors (MySQL error code 1064)
             elif error_code == 1064 or "syntax error" in error_msg.lower():
-                raise Exception(f"SQL语法错误: {error_msg}") from e
+                error_response = create_sql_syntax_error_response(
+                    message=f"SQL语法错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Database doesn't exist error (MySQL error code 1049)
             elif error_code == 1049 or "unknown database" in error_msg.lower():
-                raise Exception(f"数据库连接错误: 数据库不存在: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: 数据库不存在: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Authentication error (MySQL error code 1045)
             elif error_code == 1045 or "access denied for user" in error_msg.lower():
-                raise Exception(f"数据库连接错误: 认证失败: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: 认证失败: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
             # Other MySQL errors
             else:
-                raise Exception(f"数据库错误: {error_msg}") from e
+                error_response = create_database_error_response(
+                    message=f"数据库错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query, "error_code": error_code}
+                )
+            
+            # 抛出异常，包含JSON格式的错误信息
+            raise Exception(error_response.to_json()) from e
         except Exception as e:
             # Handle other exceptions
             error_msg = str(e)
+            
+            # 检查是否已经是JSON格式的错误（避免重复封装）
+            if error_msg.startswith('{') and error_msg.endswith('}'):
+                # 已经是JSON格式，直接抛出
+                raise e
+                
             if "no such table" in error_msg.lower():
-                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+                error_response = create_database_table_not_found_response(
+                    message=f"数据库表不存在错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query}
+                )
             elif "connection" in error_msg.lower() or "can't connect" in error_msg.lower():
-                raise Exception(f"数据库连接错误: {error_msg}") from e
+                error_response = create_database_connection_error_response(
+                    message=f"数据库连接错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query}
+                )
             else:
-                raise Exception(f"数据库错误: {error_msg}") from e
+                error_response = create_database_error_response(
+                    message=f"数据库错误: {error_msg}",
+                    context={"connection_url": connection_url, "query": query}
+                )
+            
+            # 抛出异常，包含JSON格式的错误信息
+            raise Exception(error_response.to_json()) from e
     
     def _replace_placeholders(self, text: str, context: Dict[str, Any]) -> str:
         """

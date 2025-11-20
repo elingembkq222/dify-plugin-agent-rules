@@ -12,9 +12,21 @@ from typing import Any, Dict, List, Optional, Union
 
 try:
     from .data_resolver import resolve_data, DataResolver
+    from .error_handler import (
+        ErrorType, 
+        handle_exception, 
+        create_expression_error_response,
+        create_rule_evaluation_error_response
+    )
 except ImportError:
     try:
         from data_resolver import resolve_data, DataResolver
+        from error_handler import (
+            ErrorType, 
+            handle_exception, 
+            create_expression_error_response,
+            create_rule_evaluation_error_response
+        )
     except ImportError:
         # If running as a script, add the provider directory to the path
         import os
@@ -23,6 +35,12 @@ except ImportError:
         if provider_dir not in sys.path:
             sys.path.insert(0, provider_dir)
         from data_resolver import resolve_data, DataResolver
+        from error_handler import (
+            ErrorType, 
+            handle_exception, 
+            create_expression_error_response,
+            create_rule_evaluation_error_response
+        )
 
 
 class RuleEngine:
@@ -139,7 +157,20 @@ class RuleEngine:
             # Default to True if expression format is not recognized
             return {'result': True}
         except Exception as e:
-            return {'result': False, 'error': str(e)}
+            error_msg = str(e)
+            
+            # 检查是否已经是JSON格式的错误（避免重复封装）
+            if error_msg.startswith('{') and error_msg.endswith('}'):
+                # 已经是JSON格式，直接返回
+                return {'result': False, 'error': error_msg}
+            
+            # 封装为JSON格式错误
+            error_response = create_expression_error_response(
+                message=f"表达式评估错误: {error_msg}",
+                context={"expression": expression}
+            )
+            
+            return {'result': False, 'error': error_response.to_json()}
     
     def _get_field_value(self, field: str, context: Dict[str, Any]) -> Any:
         """
@@ -300,8 +331,20 @@ class RuleEngine:
             result = eval(custom_expr, safe_globals, safe_locals)
             return {'result': bool(result)}
         except Exception as e:
-            # Log error in a real implementation
-            return {'result': False, 'error': str(e)}
+            error_msg = str(e)
+            
+            # 检查是否已经是JSON格式的错误（避免重复封装）
+            if error_msg.startswith('{') and error_msg.endswith('}'):
+                # 已经是JSON格式，直接返回
+                return {'result': False, 'error': error_msg}
+            
+            # 封装为JSON格式错误
+            error_response = create_expression_error_response(
+                message=f"自定义表达式评估错误: {error_msg}",
+                context={"custom_expression": custom_expr}
+            )
+            
+            return {'result': False, 'error': error_response.to_json()}
     
     def execute_rule_set(self, rule_set: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -364,6 +407,27 @@ class RuleEngine:
                         # If there's an error resolving required data, add it to the context as an error
                         resolved_context[req['name']] = None
                         error_message = str(e)
+                        
+                        # 检查是否已经是JSON格式的错误（避免重复封装）
+                        if not (error_message.startswith('{') and error_message.endswith('}')):
+                            # 封装为JSON格式错误
+                            if any(keyword in error_message.lower() for keyword in ['no such table']):
+                                error_response = create_database_table_not_found_response(
+                                    message=f"数据库表不存在错误: {error_message}",
+                                    context={"requirement": req}
+                                )
+                            elif any(keyword in error_message.lower() for keyword in ['connection', 'can\'t connect']):
+                                error_response = create_database_connection_error_response(
+                                    message=f"数据库连接错误: {error_message}",
+                                    context={"requirement": req}
+                                )
+                            else:
+                                error_response = create_database_error_response(
+                                    message=f"数据库错误: {error_message}",
+                                    context={"requirement": req}
+                                )
+                            error_message = error_response.to_json()
+                        
                         # Check if this is a database error and add a special rule violation
                         if any(keyword in error_message.lower() for keyword in ['database', 'sqlite', 'mysql', 'postgresql', 'no such table', 'connection']):
                             # Add a direct violation to the results
@@ -403,24 +467,87 @@ class RuleEngine:
                                 # If there's an error resolving required data, add it to the context as an error
                                 rule_context[req['name']] = None
                                 error_message = str(e)
-                                # Check if this is a database error and create a special violation
+                                
+                                # 检查是否已经是JSON格式的错误（避免重复封装）
+                                if not (error_message.startswith('{') and error_message.endswith('}')):
+                                    # 封装为JSON格式错误
+                                    if any(keyword in error_message.lower() for keyword in ['no such table']):
+                                        error_response = create_database_table_not_found_response(
+                                            message=f"数据库表不存在错误: {error_message}",
+                                            context={"rule_id": rule_id, "rule": rule}
+                                        )
+                                    elif any(keyword in error_message.lower() for keyword in ['connection', 'can\'t connect']):
+                                        error_response = create_database_connection_error_response(
+                                            message=f"数据库连接错误: {error_message}",
+                                            context={"rule_id": rule_id, "rule": rule}
+                                        )
+                                    elif any(keyword in error_message.lower() for keyword in ['expression', 'syntax']):
+                                        error_response = create_expression_error_response(
+                                            message=f"表达式评估错误: {error_message}",
+                                            context={"rule_id": rule_id, "rule": rule}
+                                        )
+                                    else:
+                                        error_response = create_rule_evaluation_error_response(
+                                            message=f"规则评估错误: {error_message}",
+                                            context={"rule_id": rule_id, "rule": rule}
+                                        )
+                                    error_message = error_response.to_json()
+                                
+                                results.append({
+                                    'id': rule_id,
+                                    'pass': False,
+                                    'message': f"规则评估错误: {error_message}",
+                                    'type': 'rule_evaluation_error',
+                                    'details': error_message
+                                })
+                                # Check if the error is related to database resolution
                                 if any(keyword in error_message.lower() for keyword in ['database', 'sqlite', 'mysql', 'postgresql', 'no such table', 'connection']):
-                                    results.append({
-                                        'id': f"{rule_id}_db_error",
-                                        'pass': False,
-                                        'message': f"数据库错误: {error_message}",
-                                        'type': 'database_error',
-                                        'details': error_message
-                                    })
-                                    # Skip to the next rule
-                                    continue
-                                # Continue processing other requirements
+                                    message = f"数据库错误: {error_message}"
+                                    error_type = 'database_error'
+                                else:
+                                    message = f"表达式评估错误: {error_message}"
+                                    error_type = 'expression_error'
+                                
+                                results.append({
+                                    'id': rule_id,
+                                    'pass': False,
+                                    'message': message,
+                                    'type': error_type,
+                                    'details': error_message
+                                })
+                                continue
                 
                 passed = self.evaluate_expression(rule_expression, rule_context)
                 
                 # Check if the expression evaluation had an error
                 if 'error' in passed:
                     error_message = passed['error']
+                    
+                    # 检查是否已经是JSON格式的错误（避免重复封装）
+                    if not (error_message.startswith('{') and error_message.endswith('}')):
+                        # 封装为JSON格式错误
+                        if any(keyword in error_message.lower() for keyword in ['no such table']):
+                            error_response = create_database_table_not_found_response(
+                                message=f"数据库表不存在错误: {error_message}",
+                                context={"rule_id": rule_id, "expression": rule_expression}
+                            )
+                        elif any(keyword in error_message.lower() for keyword in ['connection', 'can\'t connect']):
+                            error_response = create_database_connection_error_response(
+                                message=f"数据库连接错误: {error_message}",
+                                context={"rule_id": rule_id, "expression": rule_expression}
+                            )
+                        elif any(keyword in error_message.lower() for keyword in ['expression', 'syntax']):
+                            error_response = create_expression_error_response(
+                                message=f"表达式评估错误: {error_message}",
+                                context={"rule_id": rule_id, "expression": rule_expression}
+                            )
+                        else:
+                            error_response = create_rule_evaluation_error_response(
+                                message=f"规则评估错误: {error_message}",
+                                context={"rule_id": rule_id, "expression": rule_expression}
+                            )
+                        error_message = error_response.to_json()
+                    
                     # Check if the error is related to database resolution
                     if any(keyword in error_message.lower() for keyword in ['database', 'sqlite', 'mysql', 'postgresql', 'no such table', 'connection']):
                         message = f"数据库错误: {error_message}"
@@ -446,10 +573,39 @@ class RuleEngine:
                     'message': rule_message if not rule_passed else None
                 })
             except Exception as e:
+                error_message = str(e)
+                
+                # 检查是否已经是JSON格式的错误（避免重复封装）
+                if not (error_message.startswith('{') and error_message.endswith('}')):
+                    # 封装为JSON格式错误
+                    if any(keyword in error_message.lower() for keyword in ['no such table']):
+                        error_response = create_database_table_not_found_response(
+                            message=f"数据库表不存在错误: {error_message}",
+                            context={"rule_id": rule_id, "rule": rule}
+                        )
+                    elif any(keyword in error_message.lower() for keyword in ['connection', 'can\'t connect']):
+                        error_response = create_database_connection_error_response(
+                            message=f"数据库连接错误: {error_message}",
+                            context={"rule_id": rule_id, "rule": rule}
+                        )
+                    elif any(keyword in error_message.lower() for keyword in ['expression', 'syntax']):
+                        error_response = create_expression_error_response(
+                            message=f"表达式评估错误: {error_message}",
+                            context={"rule_id": rule_id, "rule": rule}
+                        )
+                    else:
+                        error_response = create_rule_evaluation_error_response(
+                            message=f"规则评估错误: {error_message}",
+                            context={"rule_id": rule_id, "rule": rule}
+                        )
+                    error_message = error_response.to_json()
+                
                 results.append({
                     'id': rule_id,
                     'pass': False,
-                    'message': f"Error evaluating rule: {str(e)}"
+                    'message': f"规则评估错误: {error_message}",
+                    'type': 'rule_evaluation_error',
+                    'details': error_message
                 })
         
         # Determine overall result
