@@ -16,19 +16,23 @@ from sqlalchemy.orm import sessionmaker, Session
 
 def is_valid_uuid(uuid_str):
     """
-    Validate if a string is a valid UUID.
+    Validate if a string has a UUID-like format (8-4-4-4-12 characters with hyphens).
+    This is a very relaxed validation that only checks the pattern structure.
     
     Args:
         uuid_str: String to validate as UUID
         
     Returns:
-        True if valid UUID, False otherwise
+        True if the string has a UUID-like format, False otherwise
     """
-    try:
-        uuid.UUID(uuid_str)
-        return True
-    except ValueError:
+    if not uuid_str or not isinstance(uuid_str, str):
         return False
+    
+    # Check if it matches the UUID pattern (8-4-4-4-12 characters with hyphens)
+    # This is a very relaxed pattern that only checks the structure
+    import re
+    pattern = r'^[a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12}$'
+    return bool(re.match(pattern, uuid_str))
 
 
 def generate_rule_id():
