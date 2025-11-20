@@ -1,6 +1,7 @@
 import requests
 import json
 import time
+import uuid
 
 # Test configuration
 API_URL = 'http://localhost:3001'
@@ -12,7 +13,7 @@ TEST_RULE_DATA = {
     "description": "Rules for validating product information",
     "rules": [
         {
-            "id": "rule-001",
+            "id": str(uuid.uuid4()),
             "expression": {
                 "field": "product.price",
                 "operator": ">=",
@@ -21,7 +22,7 @@ TEST_RULE_DATA = {
             "message": "Product price cannot be negative"
         },
         {
-            "id": "rule-002",
+            "id": str(uuid.uuid4()),
             "expression": {
                 "field": "product.stock",
                 "operator": ">=",
@@ -38,7 +39,7 @@ TEST_QUERY = "门诊病假一年7天"
 def test_add_rule():
     """Test the add_rule endpoint"""
     print("Testing add_rule endpoint...")
-    url = f"{API_URL}/add_rule"
+    url = f"{API_URL}/api/add_rule"
     response = requests.post(url, json=TEST_RULE_DATA)
     print(f"Status code: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
@@ -48,16 +49,17 @@ def test_add_rule():
 def test_validate_ruleset(ruleset_id):
     """Test the validate_ruleset endpoint"""
     print("\nTesting validate_ruleset endpoint...")
-    url = f"{API_URL}/validate_ruleset"
-    response = requests.post(url, json={"ruleset_id": ruleset_id, "context": {"product": {"price": 100, "stock": 50}}})
+    url = f"{API_URL}/api/validate_ruleset"
+    response = requests.post(url, json={"ruleset": {"id": ruleset_id, "rules": TEST_RULE_DATA["rules"]}, "context": {"product": {"price": 100, "stock": 50}}})
     print(f"Status code: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
     return response.json()
 
+
 def test_list_rules():
     """Test the list_rules endpoint"""
     print("\nTesting list_rules endpoint...")
-    url = f"{API_URL}/list_rules"
+    url = f"{API_URL}/api/list_rules"
     response = requests.get(url)
     print(f"Status code: {response.status_code}")
     result = response.json()
@@ -68,8 +70,8 @@ def test_list_rules():
 def test_generate_rule():
     """Test the generate_rule_from_query endpoint"""
     print("\nTesting generate_rule_from_query endpoint...")
-    url = f"{API_URL}/generate_rule_from_query"
-    response = requests.post(url, json={"query": TEST_QUERY})
+    url = f"{API_URL}/api/generate_rule_from_query"
+    response = requests.post(url, json={"query": TEST_QUERY, "target": "leave"})
     print(f"Status code: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
     return response.json()
@@ -103,4 +105,4 @@ if __name__ == "__main__":
     print(f"add_rule: {'PASS' if add_result.get('success') else 'FAIL'}")
     print(f"list_rules: {'PASS' if list_result.get('success') else 'FAIL'}")
     print(f"validate_ruleset: {'PASS' if validate_result.get('success') else 'FAIL'}")
-    print(f"Total rules in database: {len(list_result.get('rules', []))}")
+    print(f"Total rules in database: {len(list_result.get('rulesets', []))}")

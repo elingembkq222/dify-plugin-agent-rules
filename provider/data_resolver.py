@@ -36,6 +36,11 @@ class DataResolver:
         Args:
             business_db_url: Optional business database connection URL
         """
+        # If no business_db_url is provided, try to get it from environment variables
+        if not business_db_url:
+            import os
+            business_db_url = os.environ.get('BUSINESS_DB_URL')
+        
         self.business_db_url = business_db_url
         self._business_db_connection = None
     
@@ -111,18 +116,33 @@ class DataResolver:
                     return value.lower() == 'true'
             
             return value
+        elif source == 'db':
+            # For db source, treat it as database type
+            result = self._resolve_from_database(data_request, context)
+            print(f"Database resolution result: {result}")
+            return result
         
         # Otherwise use 'type' field
         source_type = data_request.get('type', 'context')
         
+        print(f"Resolving data with type: {source_type}, request: {data_request}")
+        
         if source_type == 'context':
-            return self._resolve_from_context(data_request, context)
+            result = self._resolve_from_context(data_request, context)
+            print(f"Context resolution result: {result}")
+            return result
         elif source_type == 'api':
-            return self._resolve_from_api(data_request, context)
+            result = self._resolve_from_api(data_request, context)
+            print(f"API resolution result: {result}")
+            return result
         elif source_type == 'database':
-            return self._resolve_from_database(data_request, context)
+            result = self._resolve_from_database(data_request, context)
+            print(f"Database resolution result: {result}")
+            return result
         elif source_type == 'static':
-            return data_request.get('value')
+            result = data_request.get('value')
+            print(f"Static resolution result: {result}")
+            return result
         else:
             return None
     
@@ -240,16 +260,31 @@ class DataResolver:
         # Replace placeholders in query
         query = self._replace_placeholders(query, context)
         
+        # Convert MySQL syntax to SQLite if needed
+        if db_type == 'sqlite' and 'DATE_SUB(CURDATE(), INTERVAL 1 YEAR)' in query:
+            query = query.replace('DATE_SUB(CURDATE(), INTERVAL 1 YEAR)', "date('now', '-1 year')")
+        
         try:
+            print(f"Executing {db_type} query: {query}")
             if db_type == 'sqlite':
-                return self._query_sqlite(query)
+                result = self._query_sqlite(query)
+                print(f"Query result: {result}")
+                return result
             elif db_type == 'postgresql' and self.business_db_url:
-                return self._query_postgresql(query)
+                result = self._query_postgresql(query)
+                print(f"Query result: {result}")
+                return result
+            elif db_type == 'mysql' and self.business_db_url:
+                result = self._query_mysql(query)
+                print(f"Query result: {result}")
+                return result
             else:
-                return None
+                raise ValueError(f"Unsupported database type: {db_type}")
         except Exception as e:
-            # Log error in a real implementation
-            return None
+            # Re-raise the exception to make database errors visible
+            error_msg = f"Error resolving from database: {e}"
+            print(error_msg)
+            raise Exception(error_msg) from e
     
     def _query_sqlite(self, query: str) -> Any:
         """
@@ -261,14 +296,12 @@ class DataResolver:
         Returns:
             Query results
         """
-        # Default to SQLite database if no business DB URL is provided
-        db_url = self.business_db_url or "sqlite:///rule_engine.db"
-        
-        # Extract file path from SQLite URL
-        if db_url.startswith('sqlite:///'):
-            db_path = db_url[10:]  # Remove 'sqlite:///' prefix
+        # Use the business database URL if provided
+        if self.business_db_url and self.business_db_url.startswith('sqlite:///'):
+            db_path = self.business_db_url[10:]  # Remove 'sqlite:///' prefix
         else:
-            db_path = db_url
+            # Default to SQLite database
+            db_path = "rule_engine.db"
         
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row  # Enable column access by name
@@ -280,7 +313,24 @@ class DataResolver:
             # For SELECT queries, return the results
             if query.strip().upper().startswith('SELECT'):
                 rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+                result = [dict(row) for row in rows]
+                
+                # If there are no results, return None
+                if not result:
+                    return None
+                
+                # If there's only one row, return the dictionary directly
+                if len(result) == 1:
+                    row = result[0]
+                    # If it's a single column result (like COUNT(*), MAX(id), etc.), return the value directly
+                    if len(row) == 1:
+                        # Get the first (and only) column value
+                        return list(row.values())[0]
+                    # Otherwise return the full row dictionary
+                    return row
+                
+                # If there are multiple rows, return the list of dictionaries
+                return result
             else:
                 # For other queries, return the number of affected rows
                 conn.commit()
@@ -319,6 +369,40 @@ class DataResolver:
         finally:
             conn.close()
     
+    def _query_mysql(self, query: str) -> Any:
+        """
+        Execute a MySQL query.
+        
+        Args:
+            query: SQL query to execute
+            
+        Returns:
+            Query results
+        """
+        try:
+            import pymysql
+        except ImportError:
+            print("PyMySQL not installed, cannot execute MySQL query")
+            return None
+        
+        conn = pymysql.connect(self.business_db_url)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute(query)
+            
+            # For SELECT queries, return the results
+            if query.strip().upper().startswith('SELECT'):
+                columns = [desc[0] for desc in cursor.description]
+                rows = cursor.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+            else:
+                # For other queries, return the number of affected rows
+                conn.commit()
+                return cursor.rowcount
+        finally:
+            conn.close()
+    
     def _replace_placeholders(self, text: str, context: Dict[str, Any]) -> str:
         """
         Replace placeholders in text with values from context.
@@ -334,8 +418,25 @@ class DataResolver:
         def replace_match(match):
             field = match.group(1)
             parts = field.split('.')
-            value = context
             
+            # Handle special case for input
+            if parts[0] == 'input' and 'input' in context:
+                value = context['input']
+                for part in parts[1:]:
+                    if isinstance(value, dict) and part in value:
+                        value = value[part]
+                    else:
+                        return match.group(0)  # Keep original if not found
+                return str(value)
+            
+            # Handle case where field is input.user_id but input is not in context
+            # but user_id is directly in context
+            if parts[0] == 'input' and len(parts) == 2 and parts[1] in context:
+                value = context[parts[1]]
+                return str(value)
+            
+            # Handle normal case
+            value = context
             try:
                 for part in parts:
                     if isinstance(value, dict) and part in value:
@@ -347,7 +448,8 @@ class DataResolver:
                 return match.group(0)  # Keep original if not found
         
         import re
-        return re.sub(r'\{\{([^}]+)\}\}', replace_match, text)
+        result = re.sub(r'\{\{([^}]+)\}\}', replace_match, text)
+        return result
     
     def _replace_placeholders_in_dict(self, data: Any, context: Dict[str, Any]) -> Any:
         """

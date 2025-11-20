@@ -10,7 +10,19 @@ import operator
 import re
 from typing import Any, Dict, List, Optional, Union
 
-from .data_resolver import resolve_data
+try:
+    from .data_resolver import resolve_data, DataResolver
+except ImportError:
+    try:
+        from data_resolver import resolve_data, DataResolver
+    except ImportError:
+        # If running as a script, add the provider directory to the path
+        import os
+        import sys
+        provider_dir = os.path.dirname(os.path.abspath(__file__))
+        if provider_dir not in sys.path:
+            sys.path.insert(0, provider_dir)
+        from data_resolver import resolve_data, DataResolver
 
 
 class RuleEngine:
@@ -48,11 +60,18 @@ class RuleEngine:
         'is_not_empty': lambda x: bool(x),
     }
     
-    def __init__(self):
+    def __init__(self, business_db_url: Optional[str] = None):
         """Initialize the Rule Engine."""
-        pass
+        # Initialize the data resolver with optional business database URL
+        try:
+            from .data_resolver import DataResolver
+        except ImportError:
+            # 如果相对导入失败，尝试绝对导入
+            from data_resolver import DataResolver
+        
+        self.data_resolver = DataResolver(business_db_url)
     
-    def evaluate_expression(self, expression: Dict[str, Any], context: Dict[str, Any]) -> bool:
+    def evaluate_expression(self, expression: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluate a rule expression against the provided context.
         
@@ -61,47 +80,66 @@ class RuleEngine:
             context: Context data to evaluate against
             
         Returns:
-            True if the expression evaluates to True, False otherwise
+            Dictionary containing 'result' (boolean) and 'error' (optional error message)
         """
         if not expression:
-            return True
+            return {'result': True}
         
-        # Handle string expressions (custom expressions)
-        if isinstance(expression, str):
-            return self._evaluate_custom_expression(expression, context)
+        try:
+            # Handle string expressions (custom expressions)
+            if isinstance(expression, str):
+                return self._evaluate_custom_expression(expression, context)
+                
+            # Handle dictionary expressions
+            if not isinstance(expression, dict):
+                return {'result': True}
+                
+            # Handle custom expressions in dictionary format
+            if 'custom' in expression:
+                return self._evaluate_custom_expression(expression['custom'], context)
             
-        # Handle dictionary expressions
-        if not isinstance(expression, dict):
-            return True
+            # Handle simple field-value comparison
+            if 'field' in expression and 'operator' in expression and 'value' in expression:
+                field = expression['field']
+                op = expression['operator']
+                value = expression['value']
+                
+                # Get the actual value from context
+                actual_value = self._get_field_value(field, context)
+                
+                # Evaluate the operation
+                result = self._evaluate_operation(op, actual_value, value, context)
+                return {'result': result}
             
-        # Handle custom expressions in dictionary format
-        if 'custom' in expression:
-            return self._evaluate_custom_expression(expression['custom'], context)
-        
-        # Handle simple field-value comparison
-        if 'field' in expression and 'operator' in expression and 'value' in expression:
-            field = expression['field']
-            op = expression['operator']
-            value = expression['value']
+            # Handle logical operations (and, or, not)
+            if 'and' in expression:
+                results = [self.evaluate_expression(expr, context) for expr in expression['and']]
+                # If any sub-expression has an error, return that error
+                for r in results:
+                    if 'error' in r:
+                        return r
+                # Otherwise, return the logical AND of all results
+                return {'result': all(r['result'] for r in results)}
             
-            # Get the actual value from context
-            actual_value = self._get_field_value(field, context)
+            if 'or' in expression:
+                results = [self.evaluate_expression(expr, context) for expr in expression['or']]
+                # If any sub-expression has an error, return that error
+                for r in results:
+                    if 'error' in r:
+                        return r
+                # Otherwise, return the logical OR of all results
+                return {'result': any(r['result'] for r in results)}
             
-            # Evaluate the operation
-            return self._evaluate_operation(op, actual_value, value, context)
-        
-        # Handle logical operations (and, or, not)
-        if 'and' in expression:
-            return all(self.evaluate_expression(expr, context) for expr in expression['and'])
-        
-        if 'or' in expression:
-            return any(self.evaluate_expression(expr, context) for expr in expression['or'])
-        
-        if 'not' in expression:
-            return not self.evaluate_expression(expression['not'], context)
-        
-        # Default to True if expression format is not recognized
-        return True
+            if 'not' in expression:
+                result = self.evaluate_expression(expression['not'], context)
+                if 'error' in result:
+                    return result
+                return {'result': not result['result']}
+            
+            # Default to True if expression format is not recognized
+            return {'result': True}
+        except Exception as e:
+            return {'result': False, 'error': str(e)}
     
     def _get_field_value(self, field: str, context: Dict[str, Any]) -> Any:
         """
@@ -151,7 +189,7 @@ class RuleEngine:
         # Handle operators that compare actual and expected values
         return self.OPERATORS[op](actual, expected)
     
-    def _evaluate_custom_expression(self, custom_expr: str, context: Dict[str, Any]) -> bool:
+    def _evaluate_custom_expression(self, custom_expr: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluate a custom Python expression.
         
@@ -160,7 +198,7 @@ class RuleEngine:
             context: Context data
             
         Returns:
-            True if the expression evaluates to True, False otherwise
+            Dictionary containing 'result' (boolean) and 'error' (optional error message)
         """
         try:
             # Create a safe namespace for evaluation
@@ -222,19 +260,49 @@ class RuleEngine:
                 def __contains__(self, key):
                     return key in self._data
             
+            # Create a custom Context class that allows attribute and dictionary access
+            class ContextWrapper:
+                def __init__(self, data):
+                    self._data = data
+                
+                def __getattr__(self, name):
+                    if name in self._data:
+                        value = self._data[name]
+                        # If the value is a dictionary, wrap it in another ContextWrapper
+                        if isinstance(value, dict):
+                            return ContextWrapper(value)
+                        return value
+                    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+                
+                def __getitem__(self, key):
+                    value = self._data[key]
+                    # If the value is a dictionary, wrap it in another ContextWrapper
+                    if isinstance(value, dict):
+                        return ContextWrapper(value)
+                    return value
+                
+                def __contains__(self, key):
+                    return key in self._data
+                
+                def __repr__(self):
+                    return f"ContextWrapper({self._data})"
+            
             # Add context variables to the local namespace
             safe_locals = dict(converted_context)
+            
+            # Add 'context' as a ContextWrapper instance
+            safe_locals['context'] = ContextWrapper(converted_context)
             
             # Add 'input' as an InputWrapper instance
             safe_locals['input'] = InputWrapper(converted_context)
             
             # Evaluate the expression
             result = eval(custom_expr, safe_globals, safe_locals)
-            return bool(result)
+            return {'result': bool(result)}
         except Exception as e:
             # Log error in a real implementation
             print(f"Error evaluating expression '{custom_expr}': {e}")
-            return False
+            return {'result': False, 'error': str(e)}
     
     def execute_rule_set(self, rule_set: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -267,7 +335,7 @@ class RuleEngine:
             if not field or not operator or value is None:
                 continue
                 
-            actual_value = resolve_data({'name': 'field_value', 'source': 'context', 'field': field}, context)
+            actual_value = self.data_resolver.resolve_data({'name': 'field_value', 'source': 'context', 'field': field}, context)
             if not self._evaluate_operation(operator, actual_value, value, context):
                 # Conditions not met, rule set does not apply
                 return {
@@ -280,6 +348,9 @@ class RuleEngine:
         # Resolve any required data for the rule set
         resolved_context = dict(context)
         
+        # Initialize results list early to capture any database errors
+        results = []
+        
         # Add any additional data required by the rules
         requires = rule_set.get('requires', [])
         if requires:
@@ -288,10 +359,25 @@ class RuleEngine:
                     # Ensure the request has a type, default to 'context' if not specified
                     if 'type' not in req:
                         req['type'] = 'context'
-                    resolved_context[req['name']] = resolve_data(req, context)
+                    try:
+                        resolved_context[req['name']] = self.data_resolver.resolve_data(req, context)
+                    except Exception as e:
+                        # If there's an error resolving required data, add it to the context as an error
+                        resolved_context[req['name']] = None
+                        error_message = str(e)
+                        print(f"Error resolving required data '{req['name']}': {error_message}")
+                        
+                        # If this is a database error, add a special rule violation
+                        if 'Error resolving from database' in error_message:
+                            # Also add a direct violation to the results
+                            results.append({
+                                'id': f"db_error_{req['name']}",
+                                'pass': False,
+                                'message': f"数据库错误: {error_message}"
+                            })
+                        # Continue processing other requirements
         
         # Evaluate each rule in the rule set
-        results = []
         for rule in rule_set['rules']:
             if not isinstance(rule, dict):
                 continue
@@ -301,11 +387,60 @@ class RuleEngine:
             rule_message = rule.get('message', 'Rule failed')
             
             try:
-                passed = self.evaluate_expression(rule_expression, resolved_context)
+                # Create a rule-specific context with resolved data
+                rule_context = dict(resolved_context)
+                
+                # Resolve any required data for this specific rule
+                rule_requires = rule.get('requires', [])
+                if rule_requires:
+                    for req in rule_requires:
+                        if isinstance(req, dict) and 'name' in req:
+                            # Ensure the request has a type, default to 'context' if not specified
+                            if 'type' not in req:
+                                req['type'] = 'context'
+                            try:
+                                rule_context[req['name']] = self.data_resolver.resolve_data(req, context)
+                            except Exception as e:
+                                # If there's an error resolving required data, add it to the context as an error
+                                rule_context[req['name']] = None
+                                error_message = str(e)
+                                print(f"Error resolving required data '{req['name']}' for rule '{rule_id}': {error_message}")
+                                
+                                # If this is a database error, create a special violation
+                                if 'Error resolving from database' in error_message:
+                                    results.append({
+                                        'id': f"{rule_id}_db_error",
+                                        'pass': False,
+                                        'message': f"数据库错误: {error_message}"
+                                    })
+                                    # Skip to the next rule
+                                    continue
+                                # Continue processing other requirements
+                
+                passed = self.evaluate_expression(rule_expression, rule_context)
+                
+                # Check if the expression evaluation had an error
+                if 'error' in passed:
+                    error_message = passed['error']
+                    # If the error is related to database resolution, include it in the message
+                    if 'Error resolving required data' in error_message:
+                        message = f"数据库错误: {error_message}"
+                    else:
+                        message = f"表达式评估错误: {error_message}"
+                    
+                    results.append({
+                        'id': rule_id,
+                        'pass': False,
+                        'message': message
+                    })
+                    continue
+                
+                # Use the result from the expression evaluation
+                rule_passed = passed['result']
                 results.append({
                     'id': rule_id,
-                    'pass': passed,
-                    'message': rule_message
+                    'pass': rule_passed,
+                    'message': rule_message if not rule_passed else None
                 })
             except Exception as e:
                 results.append({
@@ -333,15 +468,22 @@ class RuleEngine:
 rule_engine = RuleEngine()
 
 
-def execute_rule_set(rule_set: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+def execute_rule_set(rule_set: Dict[str, Any], context: Dict[str, Any], business_db_url: Optional[str] = None) -> Dict[str, Any]:
     """
     Execute a rule set against the provided context.
     
     Args:
         rule_set: Rule set data dictionary
         context: Context data to evaluate against
+        business_db_url: Optional business database connection URL
         
     Returns:
         Dictionary containing execution results
     """
-    return rule_engine.execute_rule_set(rule_set, context)
+    # If a business_db_url is provided, create a new rule engine instance with it
+    if business_db_url:
+        engine = RuleEngine(business_db_url)
+        return engine.execute_rule_set(rule_set, context)
+    else:
+        # Use the global rule engine instance
+        return rule_engine.execute_rule_set(rule_set, context)

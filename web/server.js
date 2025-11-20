@@ -24,10 +24,18 @@ app.all(/^\/api\//, async (req, res) => {
     const targetUrl = `${DIFY_BACKEND_URL}/${apiPath}`;
     console.log('Proxying request to:', targetUrl);
     console.log('Request body:', req.body);
+    
+    // 添加业务数据库URL到请求体中（如果存在）
+    const businessDbUrl = process.env.BUSINESS_DB_URL;
+    const requestBody = { ...req.body };
+    if (businessDbUrl && !requestBody.business_db_url) {
+      requestBody.business_db_url = businessDbUrl;
+    }
+    
     const response = await axios.request({
       method: req.method,
       url: targetUrl,
-      data: req.body,
+      data: requestBody,
       headers: { ...req.headers, host: new URL(targetUrl).host }
     });
     console.log('Proxy response:', response.data);

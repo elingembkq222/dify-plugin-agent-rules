@@ -51,8 +51,13 @@ class ValidateRuleset(Tool):
                     "result": None
                 }
             
-            # Execute the ruleset
-            result = execute_rule_set(ruleset, context)
+            # If business_db_url is not provided, try to get it from environment variables
+            if not business_db_url:
+                import os
+                business_db_url = os.environ.get('BUSINESS_DB_URL')
+            
+            # Execute the ruleset with business database URL
+            result = execute_rule_set(ruleset, context, business_db_url)
             
             return {
                 "success": True,
