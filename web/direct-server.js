@@ -27,7 +27,11 @@ from provider.rule_storage import generate_rule_id
 
 load_dotenv()
 
-rule = parse_query_to_rule("""${query}""", """${target}""")
+# Create a context dictionary with the target
+context = {"target": """${target}"""}
+
+# Call parse_query_to_rule with None for llm_invoker since it's deprecated
+rule = parse_query_to_rule("""${query}""", context, None)
 
 # 确保规则有 ID
 if "id" not in rule:

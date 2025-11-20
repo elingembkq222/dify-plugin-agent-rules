@@ -30,6 +30,16 @@ def is_valid_uuid(uuid_str):
     except ValueError:
         return False
 
+
+def generate_rule_id():
+    """
+    Generate a new UUID for a rule.
+    
+    Returns:
+        A string representation of a UUID.
+    """
+    return str(uuid.uuid4())
+
 # Global variables for database connection
 engine = None
 SessionLocal = None

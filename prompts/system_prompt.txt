@@ -52,14 +52,14 @@
  输出格式（通用结构，不绑定任何业务）： 
 
  { 
-   "id": "ruleset_xxx", 
+   "id": "请生成一个唯一的UUID（每次都要生成不同的UUID）", 
    "name": "规则名称", 
    "description": "规则原文", 
    "target": "generic", 
    "applies_when": [], 
    "rules": [ 
      { 
-       "id": "rule_xxx", 
+       "id": "请生成一个唯一的UUID（每次都要生成不同的UUID）", 
        "name": "子规则名称", 
        "type": "<single_request | accumulation | conditional | ratio | range | relation | custom>", 
        "description": "子规则语义", 

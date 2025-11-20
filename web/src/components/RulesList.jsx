@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Table, Button, Space, Tag, message, Collapse } from 'antd';
 import { EditOutlined, DeleteOutlined, ReloadOutlined, CopyOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { listRules, updateRule } from '../api';
@@ -10,6 +10,7 @@ const RulesList = () => {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedRuleId, setExpandedRuleId] = useState(null);
+  const hasFetched = useRef(false);
 
   const fetchRules = () => {
     setLoading(true);
@@ -28,7 +29,10 @@ const RulesList = () => {
   };
 
   useEffect(() => {
-    fetchRules();
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchRules();
+    }
   }, []);
 
   const handleDelete = (ruleId) => {
