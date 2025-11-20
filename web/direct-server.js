@@ -53,7 +53,10 @@ print(json.dumps({
   let error = '';
 
   pythonProcess.stdout.on('data', (d) => { output += d.toString(); });
-  pythonProcess.stderr.on('data', (d) => { error += d.toString(); });
+  pythonProcess.stderr.on('data', (d) => { 
+    error += d.toString(); 
+    console.error('Python stderr:', d.toString());
+  });
 
   pythonProcess.on('close', (code) => {
     if (code !== 0) {
@@ -270,20 +273,44 @@ app.post('/api/validate_ruleset', (req, res) => {
   const pythonProcess = spawn('python3', [
     '-c',
     `
-import json, os
+import json, os, sys, traceback
 from dotenv import load_dotenv
 from provider.rule_engine import execute_rule_set
 
 load_dotenv()
 
-result = execute_rule_set(${JSON.stringify(ruleset)}, ${JSON.stringify(context || {})})
-
-print(json.dumps({
-  "success": True,
-  "result": result
-}, ensure_ascii=False))
+try:
+    result = execute_rule_set(${JSON.stringify(ruleset)}, ${JSON.stringify(context || {})})
+    
+    # Only output JSON, no extra logging
+    print(json.dumps({
+      "success": True,
+      "result": result
+    }, ensure_ascii=False))
+except Exception as e:
+    # 捕获所有异常，包括数据库错误，并返回详细的错误信息
+    error_type = type(e).__name__
+    error_message = str(e)
+    traceback_str = traceback.format_exc()
+    
+    # Only output JSON error to stderr
+    print(json.dumps({
+      "success": False,
+      "error": {
+        "type": error_type,
+        "message": error_message,
+        "traceback": traceback_str
+      }
+    }, ensure_ascii=False), file=sys.stderr)
+    
+    # 返回非零退出码以指示错误
+    sys.exit(1)
     `
-  ], { cwd: '../' });
+  ], { 
+    cwd: '../',
+    // 设置环境变量以禁用Python输出
+    env: { ...process.env, PYTHONUNBUFFERED: '1' }
+  });
 
   let output = '';
   let error = '';
@@ -294,7 +321,23 @@ print(json.dumps({
   pythonProcess.on('close', (code) => {
     if (code !== 0) {
       console.error(`Python error: ${error}`);
-      return res.status(500).json({ error: "Python failed", detail: error });
+      
+      // 尝试从错误输出中解析JSON格式的错误信息
+      try {
+        const errorResult = JSON.parse(error);
+        return res.status(500).json({ 
+          success: false,
+          error: errorResult.error,
+          detail: error
+        });
+      } catch (parseError) {
+        // 如果无法解析错误输出，返回原始错误信息
+        return res.status(500).json({ 
+          success: false,
+          error: "Python execution failed",
+          detail: error
+        });
+      }
     }
 
     try {
@@ -302,7 +345,11 @@ print(json.dumps({
       res.json(result);
     } catch (parseError) {
       console.error(`JSON parse error: ${parseError}, output: ${output}`);
-      res.status(500).json({ error: "JSON parse failed", detail: output });
+      res.status(500).json({ 
+        success: false,
+        error: "JSON parse failed", 
+        detail: output 
+      });
     }
   });
 });

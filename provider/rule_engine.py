@@ -301,7 +301,6 @@ class RuleEngine:
             return {'result': bool(result)}
         except Exception as e:
             # Log error in a real implementation
-            print(f"Error evaluating expression '{custom_expr}': {e}")
             return {'result': False, 'error': str(e)}
     
     def execute_rule_set(self, rule_set: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
@@ -365,15 +364,15 @@ class RuleEngine:
                         # If there's an error resolving required data, add it to the context as an error
                         resolved_context[req['name']] = None
                         error_message = str(e)
-                        print(f"Error resolving required data '{req['name']}': {error_message}")
-                        
-                        # If this is a database error, add a special rule violation
-                        if 'Error resolving from database' in error_message:
-                            # Also add a direct violation to the results
+                        # Check if this is a database error and add a special rule violation
+                        if any(keyword in error_message.lower() for keyword in ['database', 'sqlite', 'mysql', 'postgresql', 'no such table', 'connection']):
+                            # Add a direct violation to the results
                             results.append({
                                 'id': f"db_error_{req['name']}",
                                 'pass': False,
-                                'message': f"数据库错误: {error_message}"
+                                'message': f"数据库错误: {error_message}",
+                                'type': 'database_error',
+                                'details': error_message
                             })
                         # Continue processing other requirements
         
@@ -404,14 +403,14 @@ class RuleEngine:
                                 # If there's an error resolving required data, add it to the context as an error
                                 rule_context[req['name']] = None
                                 error_message = str(e)
-                                print(f"Error resolving required data '{req['name']}' for rule '{rule_id}': {error_message}")
-                                
-                                # If this is a database error, create a special violation
-                                if 'Error resolving from database' in error_message:
+                                # Check if this is a database error and create a special violation
+                                if any(keyword in error_message.lower() for keyword in ['database', 'sqlite', 'mysql', 'postgresql', 'no such table', 'connection']):
                                     results.append({
                                         'id': f"{rule_id}_db_error",
                                         'pass': False,
-                                        'message': f"数据库错误: {error_message}"
+                                        'message': f"数据库错误: {error_message}",
+                                        'type': 'database_error',
+                                        'details': error_message
                                     })
                                     # Skip to the next rule
                                     continue
@@ -422,16 +421,20 @@ class RuleEngine:
                 # Check if the expression evaluation had an error
                 if 'error' in passed:
                     error_message = passed['error']
-                    # If the error is related to database resolution, include it in the message
-                    if 'Error resolving required data' in error_message:
+                    # Check if the error is related to database resolution
+                    if any(keyword in error_message.lower() for keyword in ['database', 'sqlite', 'mysql', 'postgresql', 'no such table', 'connection']):
                         message = f"数据库错误: {error_message}"
+                        error_type = 'database_error'
                     else:
                         message = f"表达式评估错误: {error_message}"
+                        error_type = 'expression_error'
                     
                     results.append({
                         'id': rule_id,
                         'pass': False,
-                        'message': message
+                        'message': message,
+                        'type': error_type,
+                        'details': error_message
                     })
                     continue
                 

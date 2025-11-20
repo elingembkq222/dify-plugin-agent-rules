@@ -18,10 +18,12 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // API代理路由
-app.all(/^\/api\//, async (req, res) => {
+app.use('/api', async (req, res) => {
   try {
-    const apiPath = req.originalUrl.replace(/^\/api\//, '');
-    const targetUrl = `${DIFY_BACKEND_URL}/${apiPath}`;
+    const apiPath = req.originalUrl.replace('/api/', '');
+    const targetUrl = `${DIFY_BACKEND_URL}/api/${apiPath}`;
+    console.log('Original URL:', req.originalUrl);
+    console.log('API Path:', apiPath);
     console.log('Proxying request to:', targetUrl);
     console.log('Request body:', req.body);
     

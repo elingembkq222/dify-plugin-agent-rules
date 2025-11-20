@@ -119,29 +119,22 @@ class DataResolver:
         elif source == 'db':
             # For db source, treat it as database type
             result = self._resolve_from_database(data_request, context)
-            print(f"Database resolution result: {result}")
             return result
         
         # Otherwise use 'type' field
         source_type = data_request.get('type', 'context')
         
-        print(f"Resolving data with type: {source_type}, request: {data_request}")
-        
         if source_type == 'context':
             result = self._resolve_from_context(data_request, context)
-            print(f"Context resolution result: {result}")
             return result
         elif source_type == 'api':
             result = self._resolve_from_api(data_request, context)
-            print(f"API resolution result: {result}")
             return result
         elif source_type == 'database':
             result = self._resolve_from_database(data_request, context)
-            print(f"Database resolution result: {result}")
             return result
         elif source_type == 'static':
             result = data_request.get('value')
-            print(f"Static resolution result: {result}")
             return result
         else:
             return None
@@ -265,25 +258,29 @@ class DataResolver:
             query = query.replace('DATE_SUB(CURDATE(), INTERVAL 1 YEAR)', "date('now', '-1 year')")
         
         try:
-            print(f"Executing {db_type} query: {query}")
             if db_type == 'sqlite':
                 result = self._query_sqlite(query)
-                print(f"Query result: {result}")
                 return result
             elif db_type == 'postgresql' and self.business_db_url:
                 result = self._query_postgresql(query)
-                print(f"Query result: {result}")
                 return result
             elif db_type == 'mysql' and self.business_db_url:
                 result = self._query_mysql(query)
-                print(f"Query result: {result}")
                 return result
             else:
                 raise ValueError(f"Unsupported database type: {db_type}")
         except Exception as e:
             # Re-raise the exception to make database errors visible
             error_msg = f"Error resolving from database: {e}"
-            print(error_msg)
+            
+            # Add more context for database errors
+            if "no such table" in str(e).lower():
+                error_msg = f"数据库表不存在错误: {e}"
+            elif "connection" in str(e).lower():
+                error_msg = f"数据库连接错误: {e}"
+            elif "syntax error" in str(e).lower():
+                error_msg = f"SQL语法错误: {e}"
+            
             raise Exception(error_msg) from e
     
     def _query_sqlite(self, query: str) -> Any:
@@ -382,7 +379,6 @@ class DataResolver:
         try:
             import pymysql
         except ImportError:
-            print("PyMySQL not installed, cannot execute MySQL query")
             return None
         
         conn = pymysql.connect(self.business_db_url)
@@ -488,3 +484,53 @@ def resolve_data(data_request: Dict[str, Any], context: Dict[str, Any]) -> Any:
         Resolved data
     """
     return data_resolver.resolve_data(data_request, context)
+
+
+def resolve_data(request: Dict[str, Any], context: Dict[str, Any]) -> Any:
+    """
+    Resolve data based on the request configuration.
+    
+    Args:
+        request: Data resolution request with 'name', 'type', and other parameters
+        context: Context data to use for resolution
+        
+    Returns:
+        Resolved data
+    """
+    data_type = request.get('type', 'context')
+    
+    if data_type == 'context':
+        # Resolve from context
+        field = request.get('field', request.get('name'))
+        return self._resolve_from_context(field, context)
+    elif data_type == 'database':
+        # Resolve from database
+        query = request.get('query')
+        db_type = request.get('db_type', 'sqlite')  # Default to SQLite
+        db_url = request.get('db_url', self.business_db_url)
+        
+        if not query:
+            raise ValueError("Database query is required")
+        
+        try:
+            if db_type.lower() == 'sqlite':
+                return self._query_sqlite(query, db_url)
+            elif db_type.lower() == 'postgresql':
+                return self._query_postgresql(query, db_url)
+            elif db_type.lower() == 'mysql':
+                return self._query_mysql(query, db_url)
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+        except Exception as e:
+            error_message = str(e)
+            # Check if this is a specific database error type
+            if "no such table" in error_message.lower():
+                raise Exception(f"数据库表不存在错误: {error_message}")
+            elif "connection" in error_message.lower():
+                raise Exception(f"数据库连接错误: {error_message}")
+            elif "syntax error" in error_message.lower():
+                raise Exception(f"SQL语法错误: {error_message}")
+            else:
+                raise Exception(f"数据库查询错误: {error_message}")
+    else:
+        raise ValueError(f"Unsupported data type: {data_type}")

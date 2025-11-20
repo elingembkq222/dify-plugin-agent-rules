@@ -16,12 +16,17 @@ const RulesList = () => {
     setLoading(true);
     listRules()
       .then(response => {
+        console.log('API响应:', response.data);
         setRules(response.data.rulesets || response.data.rules || []);
         message.success('规则列表加载成功');
       })
       .catch(error => {
-        message.error('加载规则失败');
-        console.error('加载规则失败:', error);
+        console.error('加载规则失败 - 详细错误:', error);
+        if (error.response) {
+          console.error('响应状态:', error.response.status);
+          console.error('响应数据:', error.response.data);
+        }
+        message.error(`加载规则失败: ${error.message || '未知错误'}`);
       })
       .finally(() => {
         setLoading(false);

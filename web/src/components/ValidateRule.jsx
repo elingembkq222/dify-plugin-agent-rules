@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Form, Input, Button, message, Card, Row, Col } from 'antd';
-import { CheckOutlined } from '@ant-design/icons';
+import { Form, Input, Button, message, Card, Row, Col, Alert, Collapse } from 'antd';
+import { CheckOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { validateRuleset } from '../api';
 import { prettyPrintJson } from 'pretty-print-json';
 
 const { TextArea } = Input;
+const { Panel } = Collapse;
 
 const ValidateRule = () => {
   const [form] = Form.useForm();
@@ -22,12 +23,51 @@ const ValidateRule = () => {
           if (response.data.success) {
             message.success('规则验证通过');
           } else {
-            message.error(`规则验证失败: ${response.data.error}`);
+            message.error(`规则验证失败: ${response.data.error?.message || response.data.error}`);
           }
         })
         .catch(error => {
-          message.error('验证规则失败');
+          // 处理HTTP错误响应
+          let errorMessage = '验证规则失败';
+          let errorDetails = null;
+          
+          if (error.response) {
+            // 服务器返回了错误状态码
+            const errorData = error.response.data;
+            
+            if (errorData && errorData.error) {
+              if (typeof errorData.error === 'object') {
+                // 详细的错误对象
+                errorMessage = `验证失败: ${errorData.error.message}`;
+                errorDetails = {
+                  type: errorData.error.type,
+                  message: errorData.error.message,
+                  traceback: errorData.error.traceback
+                };
+              } else {
+                // 简单的错误字符串
+                errorMessage = `验证失败: ${errorData.error}`;
+              }
+            } else {
+              errorMessage = `验证失败 (${error.response.status}): ${error.response.statusText}`;
+            }
+          } else if (error.request) {
+            // 请求已发送但没有收到响应
+            errorMessage = '服务器无响应，请检查网络连接';
+          } else {
+            // 其他错误
+            errorMessage = `验证失败: ${error.message}`;
+          }
+          
+          message.error(errorMessage);
           console.error('验证规则失败:', error);
+          
+          // 设置错误结果以便显示
+          setValidationResult({
+            success: false,
+            error: errorMessage,
+            details: errorDetails
+          });
         })
         .finally(() => {
           setLoading(false);
@@ -110,7 +150,42 @@ const ValidateRule = () => {
                   </div>
                 ) : (
                   <div>
-                    <strong>错误信息:</strong> {validationResult.error}
+                    <Alert
+                      message="验证失败"
+                      description={validationResult.error}
+                      type="error"
+                      icon={<ExclamationCircleOutlined />}
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                    />
+                    
+                    {validationResult.details && (
+                      <Collapse ghost>
+                        <Panel header="详细错误信息" key="error-details">
+                          <div>
+                            <strong>错误类型:</strong> {validationResult.details.type}
+                          </div>
+                          <div style={{ marginTop: 8 }}>
+                            <strong>错误消息:</strong> {validationResult.details.message}
+                          </div>
+                          {validationResult.details.traceback && (
+                            <div style={{ marginTop: 8 }}>
+                              <strong>错误堆栈:</strong>
+                              <pre style={{ 
+                                backgroundColor: '#f5f5f5', 
+                                padding: '8px', 
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                overflow: 'auto',
+                                maxHeight: '200px'
+                              }}>
+                                {validationResult.details.traceback}
+                              </pre>
+                            </div>
+                          )}
+                        </Panel>
+                      </Collapse>
+                    )}
                   </div>
                 )}
               </>
