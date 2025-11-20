@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = 3001;
@@ -212,12 +213,12 @@ app.get('/api/list_rules', (req, res) => {
     `
 import json, os
 from dotenv import load_dotenv
-from provider.rule_storage import get_all_rules, init_rule_db
+from provider.rule_storage import list_all_rule_sets, init_rule_db
 
 load_dotenv()
 init_rule_db(os.getenv('RULE_DB_URL', 'sqlite:///rule_engine.db'))
 
-rules = get_all_rules()
+rules = list_all_rule_sets()
 
 # 确保每个规则集都有 ID
 for rule_set in rules:
@@ -267,15 +268,15 @@ app.post('/api/validate_ruleset', (req, res) => {
     `
 import json, os
 from dotenv import load_dotenv
-from provider.rule_validator import validate_ruleset
+from provider.rule_engine import execute_rule_set
 
 load_dotenv()
 
-result = validate_ruleset("""${json.dumps(ruleset)}""", """${json.dumps(user_input)}""", """${json.dumps(context)}""")
+result = execute_rule_set(${JSON.stringify(ruleset)}, ${JSON.stringify(context || {})})
 
 print(json.dumps({
   "success": True,
-  "results": result
+  "result": result
 }, ensure_ascii=False))
     `
   ], { cwd: '../' });
@@ -303,13 +304,24 @@ print(json.dumps({
 });
 
 app.listen(PORT, () => {
-  console.log(`
-🚀 Direct server running on http://localhost:${PORT}`);
-  console.log('📡 API endpoints:');
-  console.log('   POST   /api/generate_rule_from_query - Generate rule from natural language query');
-  console.log('   POST   /api/add_rule - Add a new rule set');
-  console.log('   POST   /api/update_rule - Update an existing rule set');
-  console.log('   GET    /api/list_rules - List all rule sets');
-  console.log('   POST   /api/validate_ruleset - Validate a rule set against input data');
-  console.log('\n');
+    console.log(`🚀 Direct server running on http://localhost:${PORT}`);
+    console.log('📡 API endpoints:');
+    console.log('   POST   /api/generate_rule_from_query - Generate rule from natural language query');
+    console.log('   POST   /api/add_rule - Add a new rule set');
+    console.log('   POST   /api/update_rule - Update an existing rule set');
+    console.log('   GET    /api/list_rules - List all rule sets');
+    console.log('   POST   /api/validate_ruleset - Validate a rule set against input data');
+    console.log('\n');
+});
+
+// Handle unhandled exceptions
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+});
+
+// Handle unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection:', reason);
+    process.exit(1);
 });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Modal, Form, Input, TextArea, message, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, UpOutlined, DownOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
 import { updateRule } from '../api';
 
@@ -210,13 +210,13 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
             <Input placeholder="请输入规则类型，如 accumulation" />
           </Form.Item>
           <Form.Item name="description" label="规则描述">
-            <TextArea placeholder="请输入规则描述" rows={3} />
+            <Input.TextArea placeholder="请输入规则描述" rows={3} />
           </Form.Item>
           <Form.Item name="expression" label="规则表达式" rules={[{ required: true, message: '请输入规则表达式' }]}>
-            <TextArea placeholder="如：context.accumulated_sick_leave_days <= 7" rows={2} />
+            <Input.TextArea placeholder="如：context.accumulated_sick_leave_days <= 7" rows={2} />
           </Form.Item>
           <Form.Item name="message" label="提示信息" rules={[{ required: true, message: '请输入提示信息' }]}>
-            <TextArea placeholder="如：门诊病假天数已超过年度限制的7天。" rows={2} />
+            <Input.TextArea placeholder="如：门诊病假天数已超过年度限制的7天。" rows={2} />
           </Form.Item>
         </Form>
       </Modal>
