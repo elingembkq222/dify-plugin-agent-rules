@@ -13,33 +13,111 @@
 
 ## 安装和使用
 
-1. 将插件安装到 Dify 环境中
-2. 配置必要的参数：
-   - `RULE_DB_URL`: 规则数据库 URL（默认: sqlite:///rule_engine.db）
-   - `BUSINESS_DB_URL`: 业务数据库 URL（可选）
-   - `LLM_MODEL`: 用于查询解析的 LLM 模型（默认: gpt-4o）
-   - `OPENAI_API_KEY`: OpenAI API 密钥（默认模型 gpt-4o 需要）
-   - `OPENAI_API_BASE`: OpenAI API 基础 URL（默认: https://api.openai.com/v1）
-   - `ALIYUN_ACCESS_KEY_ID`: 阿里云 API 访问密钥 ID（可选，使用阿里云模型时需要）
-   - `ALIYUN_ACCESS_KEY_SECRET`: 阿里云 API 访问密钥 Secret（可选，使用阿里云模型时需要）
-   - `ALIYUN_LLM_ENDPOINT`: 阿里云 LLM API 端点（可选，默认: https://dashscope.aliyuncs.com/compatible-mode/v1）
-   - `ALIYUN_LLM_MODEL`: 阿里云 LLM 模型名称（可选，默认: qwen-7b-chat-turbo）
+### 1. 准备环境
 
-3. 环境变量配置示例（.env 文件）：
+确保您的 Dify 环境已安装并正常运行。
+
+### 2. 安装插件
+
+1. 将插件目录复制到 Dify 的插件目录中
+2. 安装依赖：
    ```bash
-   # 使用 OpenAI GPT-4o（默认）
-   LLM_MODEL=gpt-4o
-   OPENAI_API_KEY=sk-xxxx
-   OPENAI_API_BASE=https://api.openai.com/v1
+   pip install -r requirements.txt
    ```
-   ```bash
-   # 使用阿里云 Qwen 模型
-   LLM_MODEL=qwen-7b-chat-turbo
-   ALIYUN_ACCESS_KEY_ID=xxxx
-   ALIYUN_ACCESS_KEY_SECRET=xxxx
-   ALIYUN_LLM_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1
-   ALIYUN_LLM_MODEL=qwen-7b-chat-turbo
-   ```
+
+### 3. 配置插件
+
+在 Dify 环境中配置以下环境变量：
+
+- `RULE_DB_URL`: 规则数据库 URL（默认: sqlite:///rule_engine.db）
+- `BUSINESS_DB_URL`: 业务数据库 URL（可选）
+- `LLM_MODEL`: 用于查询解析的 LLM 模型（默认: gpt-4o）
+- `OPENAI_API_KEY`: OpenAI API 密钥（默认模型 gpt-4o 需要）
+- `OPENAI_API_BASE`: OpenAI API 基础 URL（默认: https://api.openai.com/v1）
+- `ALIYUN_ACCESS_KEY_ID`: 阿里云 API 访问密钥 ID（可选，使用阿里云模型时需要）
+- `ALIYUN_ACCESS_KEY_SECRET`: 阿里云 API 访问密钥 Secret（可选，使用阿里云模型时需要）
+- `ALIYUN_LLM_ENDPOINT`: 阿里云 LLM API 端点（可选，默认: https://dashscope.aliyuncs.com/compatible-mode/v1）
+- `ALIYUN_LLM_MODEL`: 阿里云 LLM 模型名称（可选，默认: qwen-7b-chat-turbo）
+
+#### 环境变量配置示例（.env 文件）：
+
+```bash
+# 使用 OpenAI GPT-4o（默认）
+LLM_MODEL=gpt-4o
+OPENAI_API_KEY=sk-xxxx
+OPENAI_API_BASE=https://api.openai.com/v1
+```
+
+```bash
+# 使用阿里云 Qwen 模型
+LLM_MODEL=qwen-7b-chat-turbo
+ALIYUN_ACCESS_KEY_ID=xxxx
+ALIYUN_ACCESS_KEY_SECRET=xxxx
+ALIYUN_LLM_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1
+ALIYUN_LLM_MODEL=qwen-7b-chat-turbo
+```
+
+#### 业务数据库配置示例：
+
+```bash
+# 业务数据库配置（可选）
+BUSINESS_DB_URL=mysql://username:password@localhost:3306/business_db
+# 或者使用SQLite
+# BUSINESS_DB_URL=sqlite:///business.db
+```
+
+### 4. 启动插件
+
+在 Dify 中启用插件，并确保插件正常运行。
+
+## 业务数据库配置
+
+本插件支持在Web环境中使用业务数据库，允许规则引擎从业务数据库中查询数据并在规则中使用。
+
+### 支持的数据库类型
+
+- MySQL
+- PostgreSQL
+- SQLite
+
+### 在规则中使用业务数据库
+
+在规则定义中，可以通过`requires`字段指定从业务数据库查询的数据：
+
+```json
+{
+  "rule_id": "example_rule",
+  "name": "示例规则",
+  "description": "从业务数据库查询数据并应用规则",
+  "applies_when": {
+    "condition": "input.age > 18"
+  },
+  "requires": [
+    {
+      "name": "consumption_count",
+      "source": "database",
+      "query": "SELECT COUNT(*) as count FROM orders WHERE customer_id = {{customer_id}}"
+    },
+    {
+      "name": "customer_info",
+      "source": "database",
+      "query": "SELECT * FROM customers WHERE id = {{customer_id}}"
+    }
+  ],
+  "rule": "consumption_count.count > 5 AND customer_info.status == 'active'",
+  "action": {
+    "type": "return",
+    "value": "高价值客户"
+  }
+}
+```
+
+### 注意事项
+
+1. 如果未配置业务数据库URL，插件将使用默认配置
+2. 查询语句中的占位符`{{field}}`将被替换为上下文中的对应值
+3. 数据库查询结果将作为变量在规则中使用
+4. 请确保数据库连接字符串格式正确，并且具有适当的访问权限
 
 ## 工具接口
 
@@ -155,27 +233,75 @@ pip install pytest
 
 ### 运行测试
 
-运行所有测试用例：
+#### 使用Makefile (推荐)
 
 ```bash
-pytest tests/
+# 安装依赖
+make install
+
+# 运行所有测试
+make test
+
+# 运行特定测试
+make test-db-connection
+make test-automated
+make test-coverage
 ```
 
-运行特定测试文件：
+#### 使用Shell脚本
 
 ```bash
-pytest tests/test_api.py
-pytest tests/test_generate_rule.py
-pytest tests/test_uuid_generation.py
-pytest tests/test_uuid_validation.py
+# 运行所有测试
+./tests/run_all_tests.sh
+
+# 运行特定测试
+python tests/test_automated.py
+```
+
+#### 使用Python unittest
+
+```bash
+# 运行自动化测试套件
+python tests/test_automated.py
+
+# 使用pytest运行测试
+pytest tests/
 ```
 
 ### 测试文件说明
 
+- `test_automated.py`: 使用unittest框架的自动化测试套件
+  - 测试多数据库支持功能
+  - 测试数据库URL优先级逻辑
+  - 测试数据库连接错误处理
 - `test_api.py`: API 功能测试
 - `test_generate_rule.py`: 规则生成功能测试
 - `test_uuid_generation.py`: UUID 生成功能测试
 - `test_uuid_validation.py`: UUID 验证功能测试
+
+## 多数据库支持
+
+本项目支持业务数据库和规则数据库的分离：
+
+1. **DataResolver类**:
+   - 接受`business_db_url`和`rule_db_url`两个参数
+   - 根据`data_request`中的参数选择使用哪个数据库
+
+2. **数据库URL优先级**:
+   1. `data_request`中的`explicit_db_url` (最高优先级)
+   2. 根据`db_source`选择对应的数据库URL
+   3. 默认使用业务数据库URL
+
+3. **RuleEngine类**:
+   - 支持传递两个数据库URL给DataResolver
+
+## 持续集成
+
+项目配置了GitHub Actions工作流，在以下情况下自动运行测试：
+
+- 代码推送到`main`或`develop`分支
+- 创建针对`main`或`develop`分支的Pull Request
+- 每天凌晨2点定时运行
 
 ## 开发和贡献
 

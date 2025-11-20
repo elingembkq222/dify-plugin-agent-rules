@@ -60,16 +60,16 @@ class RuleEngine:
         'is_not_empty': lambda x: bool(x),
     }
     
-    def __init__(self, business_db_url: Optional[str] = None):
+    def __init__(self, business_db_url: Optional[str] = None, rule_db_url: Optional[str] = None):
         """Initialize the Rule Engine."""
-        # Initialize the data resolver with optional business database URL
+        # Initialize the data resolver with optional business and rule database URLs
         try:
             from .data_resolver import DataResolver
         except ImportError:
             # 如果相对导入失败，尝试绝对导入
             from data_resolver import DataResolver
         
-        self.data_resolver = DataResolver(business_db_url)
+        self.data_resolver = DataResolver(business_db_url, rule_db_url)
     
     def evaluate_expression(self, expression: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -471,7 +471,7 @@ class RuleEngine:
 rule_engine = RuleEngine()
 
 
-def execute_rule_set(rule_set: Dict[str, Any], context: Dict[str, Any], business_db_url: Optional[str] = None) -> Dict[str, Any]:
+def execute_rule_set(rule_set: Dict[str, Any], context: Dict[str, Any], business_db_url: Optional[str] = None, rule_db_url: Optional[str] = None) -> Dict[str, Any]:
     """
     Execute a rule set against the provided context.
     
@@ -479,13 +479,14 @@ def execute_rule_set(rule_set: Dict[str, Any], context: Dict[str, Any], business
         rule_set: Rule set data dictionary
         context: Context data to evaluate against
         business_db_url: Optional business database connection URL
+        rule_db_url: Optional rule database connection URL
         
     Returns:
         Dictionary containing execution results
     """
     # If a business_db_url is provided, create a new rule engine instance with it
-    if business_db_url:
-        engine = RuleEngine(business_db_url)
+    if business_db_url or rule_db_url:
+        engine = RuleEngine(business_db_url, rule_db_url)
         return engine.execute_rule_set(rule_set, context)
     else:
         # Use the global rule engine instance

@@ -29,20 +29,28 @@ class DataResolver:
     Data Resolver for fetching data from various sources.
     """
     
-    def __init__(self, business_db_url: Optional[str] = None):
+    def __init__(self, business_db_url: Optional[str] = None, rule_db_url: Optional[str] = None):
         """
         Initialize the Data Resolver.
         
         Args:
             business_db_url: Optional business database connection URL
+            rule_db_url: Optional rule database connection URL
         """
         # If no business_db_url is provided, try to get it from environment variables
         if not business_db_url:
             import os
             business_db_url = os.environ.get('BUSINESS_DB_URL')
         
+        # If no rule_db_url is provided, try to get it from environment variables
+        if not rule_db_url:
+            import os
+            rule_db_url = os.environ.get('RULE_DB_URL')
+        
         self.business_db_url = business_db_url
+        self.rule_db_url = rule_db_url
         self._business_db_connection = None
+        self._rule_db_connection = None
     
     def _get_nested_value(self, data: Dict[str, Any], path: str) -> Any:
         """
@@ -247,6 +255,21 @@ class DataResolver:
         db_type = data_request.get('db_type', 'sqlite')
         query = data_request.get('query')
         
+        # Determine which database URL to use
+        # Priority: 1. Explicit db_url in data_request, 2. Default URL based on db_source
+        explicit_db_url = data_request.get('db_url')
+        
+        if explicit_db_url:
+            # Use the explicitly provided database URL
+            db_url = explicit_db_url
+        else:
+            # Use the default database URL based on db_source (default to business)
+            db_source = data_request.get('db_source', 'business')
+            if db_source == 'rule':
+                db_url = getattr(self, 'rule_db_url', self.business_db_url)
+            else:  # Default to business database
+                db_url = self.business_db_url
+        
         if not query:
             return None
         
@@ -259,13 +282,13 @@ class DataResolver:
         
         try:
             if db_type == 'sqlite':
-                result = self._query_sqlite(query)
+                result = self._query_sqlite(query, db_url)
                 return result
-            elif db_type == 'postgresql' and self.business_db_url:
-                result = self._query_postgresql(query)
+            elif db_type == 'postgresql' and db_url:
+                result = self._query_postgresql(query, db_url)
                 return result
-            elif db_type == 'mysql' and self.business_db_url:
-                result = self._query_mysql(query)
+            elif db_type == 'mysql' and db_url:
+                result = self._query_mysql(query, db_url)
                 return result
             else:
                 raise ValueError(f"Unsupported database type: {db_type}")
@@ -283,18 +306,21 @@ class DataResolver:
             
             raise Exception(error_msg) from e
     
-    def _query_sqlite(self, query: str) -> Any:
+    def _query_sqlite(self, query: str, db_url: Optional[str] = None) -> Any:
         """
         Execute a SQLite query.
         
         Args:
             query: SQL query to execute
+            db_url: Optional database URL, defaults to self.business_db_url
             
         Returns:
             Query results
         """
-        # Use the business database URL if provided
-        if self.business_db_url and self.business_db_url.startswith('sqlite:///'):
+        # Use the provided db_url or fall back to business database URL
+        if db_url and db_url.startswith('sqlite:///'):
+            db_path = db_url[10:]  # Remove 'sqlite:///' prefix
+        elif self.business_db_url and self.business_db_url.startswith('sqlite:///'):
             db_path = self.business_db_url[10:]  # Remove 'sqlite:///' prefix
         else:
             # Default to SQLite database
@@ -335,12 +361,13 @@ class DataResolver:
         finally:
             conn.close()
     
-    def _query_postgresql(self, query: str) -> Any:
+    def _query_postgresql(self, query: str, db_url: Optional[str] = None) -> Any:
         """
         Execute a PostgreSQL query.
         
         Args:
             query: SQL query to execute
+            db_url: Optional database URL, defaults to self.business_db_url
             
         Returns:
             Query results
@@ -348,7 +375,12 @@ class DataResolver:
         if not HAS_POSTGRESQL:
             return None
         
-        conn = psycopg2.connect(self.business_db_url)
+        # Use the provided db_url or fall back to business database URL
+        connection_url = db_url if db_url else self.business_db_url
+        if not connection_url:
+            raise ValueError("No database URL provided for PostgreSQL connection")
+        
+        conn = psycopg2.connect(connection_url)
         cursor = conn.cursor()
         
         try:
@@ -366,12 +398,13 @@ class DataResolver:
         finally:
             conn.close()
     
-    def _query_mysql(self, query: str) -> Any:
+    def _query_mysql(self, query: str, db_url: Optional[str] = None) -> Any:
         """
         Execute a MySQL query.
         
         Args:
             query: SQL query to execute
+            db_url: Optional database URL, defaults to self.business_db_url
             
         Returns:
             Query results
@@ -381,23 +414,46 @@ class DataResolver:
         except ImportError:
             return None
         
-        conn = pymysql.connect(self.business_db_url)
-        cursor = conn.cursor()
+        # Use the provided db_url or fall back to business database URL
+        connection_url = db_url if db_url else self.business_db_url
+        if not connection_url:
+            raise ValueError("No database URL provided for MySQL connection")
         
         try:
-            cursor.execute(query)
+            # Convert SQLAlchemy URL to pymysql compatible format
+            if connection_url.startswith('mysql+pymysql://'):
+                connection_url = connection_url.replace('mysql+pymysql://', 'mysql://')
             
-            # For SELECT queries, return the results
-            if query.strip().upper().startswith('SELECT'):
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                return [dict(zip(columns, row)) for row in rows]
-            else:
-                # For other queries, return the number of affected rows
-                conn.commit()
-                return cursor.rowcount
-        finally:
-            conn.close()
+            conn = pymysql.connect(connection_url)
+            cursor = conn.cursor()
+            
+            try:
+                cursor.execute(query)
+                
+                # For SELECT queries, return the results
+                if query.strip().upper().startswith('SELECT'):
+                    columns = [desc[0] for desc in cursor.description]
+                    rows = cursor.fetchall()
+                    return [dict(zip(columns, row)) for row in rows]
+                else:
+                    # For other queries, return the number of affected rows
+                    conn.commit()
+                    return cursor.rowcount
+            finally:
+                conn.close()
+        except Exception as e:
+            # Re-raise the exception to make database errors visible
+            error_msg = f"Error executing MySQL query: {e}"
+            
+            # Add more context for database errors
+            if "no such table" in str(e).lower():
+                error_msg = f"数据库表不存在错误: {e}"
+            elif "connection" in str(e).lower() or "can't connect" in str(e).lower() or "access denied" in str(e).lower():
+                error_msg = f"数据库连接错误: {e}"
+            elif "syntax error" in str(e).lower():
+                error_msg = f"SQL语法错误: {e}"
+            
+            raise Exception(error_msg) from e
     
     def _replace_placeholders(self, text: str, context: Dict[str, Any]) -> str:
         """
