@@ -57,7 +57,7 @@ class RuleEngine:
         Evaluate a rule expression against the provided context.
         
         Args:
-            expression: Rule expression dictionary
+            expression: Rule expression dictionary or string
             context: Context data to evaluate against
             
         Returns:
@@ -65,7 +65,19 @@ class RuleEngine:
         """
         if not expression:
             return True
+        
+        # Handle string expressions (custom expressions)
+        if isinstance(expression, str):
+            return self._evaluate_custom_expression(expression, context)
             
+        # Handle dictionary expressions
+        if not isinstance(expression, dict):
+            return True
+            
+        # Handle custom expressions in dictionary format
+        if 'custom' in expression:
+            return self._evaluate_custom_expression(expression['custom'], context)
+        
         # Handle simple field-value comparison
         if 'field' in expression and 'operator' in expression and 'value' in expression:
             field = expression['field']
@@ -87,10 +99,6 @@ class RuleEngine:
         
         if 'not' in expression:
             return not self.evaluate_expression(expression['not'], context)
-        
-        # Handle custom expressions
-        if 'custom' in expression:
-            return self._evaluate_custom_expression(expression['custom'], context)
         
         # Default to True if expression format is not recognized
         return True
@@ -227,9 +235,14 @@ class RuleEngine:
         resolved_context = dict(context)
         
         # Add any additional data required by the rules
-        for req in rule_set.get('requires', []):
-            if isinstance(req, dict) and 'name' in req:
-                resolved_context[req['name']] = resolve_data(req, context)
+        requires = rule_set.get('requires', [])
+        if requires:
+            for req in requires:
+                if isinstance(req, dict) and 'name' in req:
+                    # Ensure the request has a type, default to 'context' if not specified
+                    if 'type' not in req:
+                        req['type'] = 'context'
+                    resolved_context[req['name']] = resolve_data(req, context)
         
         # Evaluate each rule in the rule set
         results = []
