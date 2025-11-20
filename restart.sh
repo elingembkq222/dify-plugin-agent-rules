@@ -57,31 +57,4 @@ echo -e "\033[1;32m- 后端: http://localhost:3001\033[0m"
 echo -e "\033[1;36m========================================\033[0m"
 echo -e "\n\033[1;33m⚠️  停止服务命令: kill $BACKEND_PID $FRONTEND_PID\033[0m"
 
-# 自动打开浏览器功能
-echo -e "\n\033[1;34m⏳ 正在等待服务完全启动...\033[0m"
-sleep 3  # 额外等待以确保服务完全就绪
-
-# 检查系统类型，使用适当的命令打开浏览器
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    echo -e "\033[1;32m🌐 正在打开浏览器...\033[0m"
-    open http://localhost:5173
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Linux
-    echo -e "\033[1;32m🌐 正在打开浏览器...\033[0m"
-    if command -v xdg-open &> /dev/null; then
-        xdg-open http://localhost:5173
-    elif command -v gnome-open &> /dev/null; then
-        gnome-open http://localhost:5173
-    else
-        echo -e "\033[1;33m⚠️  无法自动打开浏览器，请手动访问 http://localhost:5173\033[0m"
-    fi
-elif [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "win32" ]]; then
-    # Windows
-    echo -e "\033[1;32m🌐 正在打开浏览器...\033[0m"
-    start http://localhost:5173
-else
-    echo -e "\033[1;33m⚠️  无法自动打开浏览器，请手动访问 http://localhost:5173\033[0m"
-fi
-
 echo -e "\n\033[1;35m✨ 脚本执行完成！\033[0m"

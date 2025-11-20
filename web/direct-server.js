@@ -265,9 +265,10 @@ print(json.dumps({
 app.post('/api/validate_ruleset', (req, res) => {
   const data = req.body;
   const now = new Date().toISOString();
-  const ruleset = data.ruleset;
-  const user_input = data.user_input;
-  const context = data.context;
+  // 支持多种请求格式
+  const ruleset = data.ruleset || data.rules || [];
+  const context = data.context || data.user_input || {};
+  const business_db_url = data.business_db_url || undefined;
 
   // Python 直接接收 JSON，不做任何转义处理
   const pythonProcess = spawn('python3', [
@@ -279,8 +280,17 @@ from provider.rule_engine import execute_rule_set
 
 load_dotenv()
 
+# 解析JSON字符串
+ruleset_json = '''${JSON.stringify(ruleset)}'''
+context_json = '''${JSON.stringify(context)}'''
+business_db_url_json = '''${business_db_url !== undefined ? JSON.stringify(business_db_url) : 'null'}'''
+
 try:
-    result = execute_rule_set(${JSON.stringify(ruleset)}, ${JSON.stringify(context || {})})
+    ruleset = json.loads(ruleset_json)
+    context = json.loads(context_json)
+    business_db_url = json.loads(business_db_url_json) if business_db_url_json != 'null' and business_db_url_json != 'undefined' else None
+    
+    result = execute_rule_set(ruleset, context, business_db_url=business_db_url)
     
     # Only output JSON, no extra logging
     print(json.dumps({

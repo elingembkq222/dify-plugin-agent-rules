@@ -63,7 +63,7 @@
        "name": "子规则名称", 
        "type": "<single_request | accumulation | conditional | ratio | range | relation | custom>", 
        "description": "子规则语义", 
-       "expression": "逻辑表达式字符串，使用 input.<变量> 或 context.<变量>", 
+       "expression": "逻辑表达式字符串，使用 {{input.<变量>}} 或 {{context.<变量>}}", 
        "message": "违反规则时提示用户的消息", 
        "requires": [ 
          { 

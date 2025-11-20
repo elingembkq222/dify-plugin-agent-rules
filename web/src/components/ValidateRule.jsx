@@ -17,6 +17,7 @@ const ValidateRule = () => {
     try {
       const ruleset = JSON.parse(values.ruleset);
       const context = JSON.parse(values.context);
+      
       validateRuleset({ ruleset, context })
         .then(response => {
           setValidationResult(response.data);

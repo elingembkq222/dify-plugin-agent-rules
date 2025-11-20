@@ -15,8 +15,11 @@ try:
     from .error_handler import (
         ErrorType, 
         handle_exception, 
-        create_expression_error_response,
-        create_rule_evaluation_error_response
+        create_expression_evaluation_error_response,
+        create_sql_syntax_error_response,
+        create_database_connection_error_response,
+        create_database_table_not_found_response,
+        create_database_error_response
     )
 except ImportError:
     try:
@@ -24,8 +27,11 @@ except ImportError:
         from error_handler import (
             ErrorType, 
             handle_exception, 
-            create_expression_error_response,
-            create_rule_evaluation_error_response
+            create_expression_evaluation_error_response,
+            create_sql_syntax_error_response,
+            create_database_connection_error_response,
+            create_database_table_not_found_response,
+            create_database_error_response
         )
     except ImportError:
         # If running as a script, add the provider directory to the path
@@ -38,8 +44,11 @@ except ImportError:
         from error_handler import (
             ErrorType, 
             handle_exception, 
-            create_expression_error_response,
-            create_rule_evaluation_error_response
+            create_expression_evaluation_error_response,
+            create_sql_syntax_error_response,
+            create_database_connection_error_response,
+            create_database_table_not_found_response,
+            create_database_error_response
         )
 
 
@@ -165,7 +174,7 @@ class RuleEngine:
                 return {'result': False, 'error': error_msg}
             
             # 封装为JSON格式错误
-            error_response = create_expression_error_response(
+            error_response = create_expression_evaluation_error_response(
                 message=f"表达式评估错误: {error_msg}",
                 context={"expression": expression}
             )
@@ -220,131 +229,136 @@ class RuleEngine:
         # Handle operators that compare actual and expected values
         return self.OPERATORS[op](actual, expected)
     
-    def _evaluate_custom_expression(self, custom_expr: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Evaluate a custom Python expression.
-        
-        Args:
-            custom_expr: Custom Python expression string
-            context: Context data
-            
-        Returns:
-            Dictionary containing 'result' (boolean) and 'error' (optional error message)
-        """
+    def _evaluate_custom_expression(self, custom_expr: str, context: Dict[str, Any]) -> Any:
         try:
-            # Create a safe namespace for evaluation
+            # 创建安全评估命名空间
             safe_globals = {
-                '__builtins__': {},
-                'len': len,
-                'str': str,
-                'int': int,
-                'float': float,
-                'bool': bool,
-                'abs': abs,
-                'min': min,
-                'max': max,
-                'sum': sum,
-                'any': any,
-                'all': all,
-                're': re,
+                '__builtins__': {
+                    'abs': abs,
+                    'len': len,
+                    'int': int,
+                    'float': float,
+                    'str': str,
+                    'bool': bool,
+                    'round': round,
+                    'max': max,
+                    'min': min,
+                    'sum': sum,
+                    'list': list,
+                    'dict': dict,
+                    'tuple': tuple,
+                    'set': set,
+                },
+                're': re
             }
-            
-            # Create a copy of context with type conversion
+
+            # 将上下文数据转换为更友好的类型
             converted_context = {}
             for key, value in context.items():
                 if isinstance(value, str):
-                    # Try to convert to int
+                    # 尝试将字符串转换为数字
                     try:
                         converted_context[key] = int(value)
-                        continue
                     except ValueError:
-                        pass
-                    
-                    # Try to convert to float
-                    try:
-                        converted_context[key] = float(value)
-                        continue
-                    except ValueError:
-                        pass
-                    
-                    # Try to convert to bool
-                    if value.lower() in ('true', 'false'):
-                        converted_context[key] = value.lower() == 'true'
-                        continue
-                
-                # Keep original value if no conversion is needed or possible
-                converted_context[key] = value
-            
-            # Create a custom Input class that allows attribute access
-            class InputWrapper:
-                def __init__(self, data):
-                    self._data = data
-                
-                def __getattr__(self, name):
-                    if name in self._data:
-                        return self._data[name]
-                    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-                
-                def __getitem__(self, key):
-                    return self._data[key]
-                
-                def __contains__(self, key):
-                    return key in self._data
-            
-            # Create a custom Context class that allows attribute and dictionary access
+                        try:
+                            converted_context[key] = float(value)
+                        except ValueError:
+                            # 尝试将字符串转换为布尔值
+                            if value.lower() == 'true':
+                                converted_context[key] = True
+                            elif value.lower() == 'false':
+                                converted_context[key] = False
+                            else:
+                                converted_context[key] = value
+                elif isinstance(value, list):
+                    # 如果是列表，尝试提取第一个元素
+                    if len(value) == 1:
+                        converted_context[key] = value[0]
+                    else:
+                        converted_context[key] = value
+                elif isinstance(value, dict):
+                    # 如果是字典，尝试提取第一个值
+                    if len(value) == 1:
+                        converted_context[key] = list(value.values())[0]
+                    else:
+                        converted_context[key] = value
+                else:
+                    converted_context[key] = value
+
+            # 替换表达式中的变量占位符
+            substituted_expr = self.data_resolver._replace_placeholders(custom_expr, converted_context)
+            print(f"DEBUG: substituted_expr={substituted_expr}, context.consumption_count={converted_context.get('consumption_count')}")
+            print(f"DEBUG: type(consumption_count)={type(converted_context.get('consumption_count'))}")
+
+            # 定义上下文访问包装器类
             class ContextWrapper:
                 def __init__(self, data):
-                    self._data = data
-                
+                    self.__dict__['data'] = data
+
                 def __getattr__(self, name):
-                    if name in self._data:
-                        value = self._data[name]
-                        # If the value is a dictionary, wrap it in another ContextWrapper
+                    try:
+                        value = self.data[name]
                         if isinstance(value, dict):
                             return ContextWrapper(value)
+                        elif isinstance(value, list):
+                            return [ContextWrapper(item) if isinstance(item, dict) else item for item in value]
                         return value
-                    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-                
+                    except KeyError:
+                        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
                 def __getitem__(self, key):
-                    value = self._data[key]
-                    # If the value is a dictionary, wrap it in another ContextWrapper
-                    if isinstance(value, dict):
-                        return ContextWrapper(value)
-                    return value
-                
-                def __contains__(self, key):
-                    return key in self._data
-                
-                def __repr__(self):
-                    return f"ContextWrapper({self._data})"
-            
-            # Add context variables to the local namespace
-            safe_locals = dict(converted_context)
-            
-            # Add 'context' as a ContextWrapper instance
-            safe_locals['context'] = ContextWrapper(converted_context)
-            
-            # Add 'input' as an InputWrapper instance
-            safe_locals['input'] = InputWrapper(converted_context)
-            
-            # Evaluate the expression
-            result = eval(custom_expr, safe_globals, safe_locals)
-            return {'result': bool(result)}
+                    try:
+                        value = self.data[key]
+                        if isinstance(value, dict):
+                            return ContextWrapper(value)
+                        elif isinstance(value, list):
+                            return [ContextWrapper(item) if isinstance(item, dict) else item for item in value]
+                        return value
+                    except KeyError:
+                        raise IndexError(f"'{type(self).__name__}' object has no item with key '{key}'")
+
+            # 定义输入访问包装器类
+            class InputWrapper:
+                def __init__(self, data):
+                    self.__dict__['data'] = data
+
+                def __getattr__(self, name):
+                    try:
+                        value = self.data[name]
+                        if isinstance(value, dict):
+                            return InputWrapper(value)
+                        elif isinstance(value, list):
+                            return [InputWrapper(item) if isinstance(item, dict) else item for item in value]
+                        return value
+                    except KeyError:
+                        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+                def __getitem__(self, key):
+                    try:
+                        value = self.data[key]
+                        if isinstance(value, dict):
+                            return InputWrapper(value)
+                        elif isinstance(value, list):
+                            return [InputWrapper(item) if isinstance(item, dict) else item for item in value]
+                        return value
+                    except KeyError:
+                        raise IndexError(f"'{type(self).__name__}' object has no item with key '{key}'")
+
+            # 创建安全的上下文变量
+            safe_locals = {
+                'context': ContextWrapper(converted_context),
+                'input': InputWrapper(converted_context)
+            }
+
+            # 使用eval安全评估表达式
+            result = eval(substituted_expr, safe_globals, safe_locals)
+            return result
         except Exception as e:
-            error_msg = str(e)
-            
-            # 检查是否已经是JSON格式的错误（避免重复封装）
-            if error_msg.startswith('{') and error_msg.endswith('}'):
-                # 已经是JSON格式，直接返回
-                return {'result': False, 'error': error_msg}
-            
-            # 封装为JSON格式错误
-            error_response = create_expression_error_response(
-                message=f"自定义表达式评估错误: {error_msg}",
-                context={"custom_expression": custom_expr}
+            error_response = create_expression_evaluation_error_response(
+                message=f"自定义表达式评估错误: {str(e)}",
+                context={"custom_expression": custom_expr, "substituted_expr": substituted_expr}
             )
-            
-            return {'result': False, 'error': error_response.to_json()}
+            raise Exception(error_response.to_json()) from e
     
     def execute_rule_set(self, rule_set: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -366,6 +380,9 @@ class RuleEngine:
         
         # Check if applies_when conditions are met
         applies_when = rule_set.get('applies_when', [])
+        if applies_when is None:
+            applies_when = []
+            
         for condition in applies_when:
             if not isinstance(condition, dict):
                 continue
@@ -482,12 +499,12 @@ class RuleEngine:
                                             context={"rule_id": rule_id, "rule": rule}
                                         )
                                     elif any(keyword in error_message.lower() for keyword in ['expression', 'syntax']):
-                                        error_response = create_expression_error_response(
+                                        error_response = create_expression_evaluation_error_response(
                                             message=f"表达式评估错误: {error_message}",
                                             context={"rule_id": rule_id, "rule": rule}
                                         )
                                     else:
-                                        error_response = create_rule_evaluation_error_response(
+                                        error_response = create_expression_evaluation_error_response(
                                             message=f"规则评估错误: {error_message}",
                                             context={"rule_id": rule_id, "rule": rule}
                                         )
@@ -537,12 +554,12 @@ class RuleEngine:
                                 context={"rule_id": rule_id, "expression": rule_expression}
                             )
                         elif any(keyword in error_message.lower() for keyword in ['expression', 'syntax']):
-                            error_response = create_expression_error_response(
+                            error_response = create_expression_evaluation_error_response(
                                 message=f"表达式评估错误: {error_message}",
                                 context={"rule_id": rule_id, "expression": rule_expression}
                             )
                         else:
-                            error_response = create_rule_evaluation_error_response(
+                            error_response = create_expression_evaluation_error_response(
                                 message=f"规则评估错误: {error_message}",
                                 context={"rule_id": rule_id, "expression": rule_expression}
                             )
@@ -589,12 +606,12 @@ class RuleEngine:
                             context={"rule_id": rule_id, "rule": rule}
                         )
                     elif any(keyword in error_message.lower() for keyword in ['expression', 'syntax']):
-                        error_response = create_expression_error_response(
+                        error_response = create_expression_evaluation_error_response(
                             message=f"表达式评估错误: {error_message}",
                             context={"rule_id": rule_id, "rule": rule}
                         )
                     else:
-                        error_response = create_rule_evaluation_error_response(
+                        error_response = create_expression_evaluation_error_response(
                             message=f"规则评估错误: {error_message}",
                             context={"rule_id": rule_id, "rule": rule}
                         )

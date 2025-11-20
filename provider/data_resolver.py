@@ -16,14 +16,40 @@ import sqlite3
 from typing import Any, Dict, List, Optional, Union
 
 # 导入错误处理模块
-from .error_handler import (
-    ErrorType,
-    handle_exception,
-    create_database_error_response,
-    create_database_connection_error_response,
-    create_database_table_not_found_response,
-    create_sql_syntax_error_response
-)
+try:
+    from .error_handler import (
+        ErrorType,
+        handle_exception,
+        create_database_error_response,
+        create_database_connection_error_response,
+        create_database_table_not_found_response,
+        create_sql_syntax_error_response
+    )
+except ImportError:
+    try:
+        from error_handler import (
+            ErrorType,
+            handle_exception,
+            create_database_error_response,
+            create_database_connection_error_response,
+            create_database_table_not_found_response,
+            create_sql_syntax_error_response
+        )
+    except ImportError:
+        # If running as a script, add the provider directory to the path
+        import os
+        import sys
+        provider_dir = os.path.dirname(os.path.abspath(__file__))
+        if provider_dir not in sys.path:
+            sys.path.insert(0, provider_dir)
+        from error_handler import (
+            ErrorType,
+            handle_exception,
+            create_database_error_response,
+            create_database_connection_error_response,
+            create_database_table_not_found_response,
+            create_sql_syntax_error_response
+        )
 
 import urllib.request
 import urllib.parse
@@ -270,7 +296,6 @@ class DataResolver:
         Returns:
             Resolved data from database
         """
-        db_type = data_request.get('db_type', 'sqlite')
         query = data_request.get('query')
         
         # Determine which database URL to use
@@ -287,6 +312,38 @@ class DataResolver:
                 db_url = getattr(self, 'rule_db_url', self.business_db_url)
             else:  # Default to business database
                 db_url = self.business_db_url
+        
+        # Auto-detect database type from URL
+        if db_url:
+            if db_url.startswith('sqlite:///'):
+                db_type = 'sqlite'
+            elif db_url.startswith('postgresql://') or db_url.startswith('postgres://'):
+                db_type = 'postgresql'
+            elif db_url.startswith('mysql://') or db_url.startswith('mysql+pymysql://'):
+                db_type = 'mysql'
+            else:
+                # Fallback to checking explicit db_type or default to mysql
+                db_type = data_request.get('db_type', 'mysql')
+        else:
+            # No URL available, try to get from environment variables
+            if not db_url:
+                import os
+                db_url = os.environ.get('BUSINESS_DB_URL')
+            
+            if db_url:
+                # Determine db_type from the URL we just retrieved
+                if db_url.startswith('sqlite:///'):
+                    db_type = 'sqlite'
+                elif db_url.startswith('postgresql://') or db_url.startswith('postgres://'):
+                    db_type = 'postgresql'
+                elif db_url.startswith('mysql://') or db_url.startswith('mysql+pymysql://'):
+                    db_type = 'mysql'
+                else:
+                    # Fallback to checking explicit db_type or default to mysql
+                    db_type = data_request.get('db_type', 'mysql')
+            else:
+                # Still no URL available, use explicit db_type or default to mysql
+                db_type = data_request.get('db_type', 'mysql')
         
         if not query:
             return None
@@ -364,8 +421,12 @@ class DataResolver:
         elif self.business_db_url and self.business_db_url.startswith('sqlite:///'):
             db_path = self.business_db_url[10:]  # Remove 'sqlite:///' prefix
         else:
-            # Default to SQLite database
-            db_path = "rule_engine.db"
+            # If no SQLite URL is available, raise an error instead of defaulting to rule_engine.db
+            error_response = create_database_connection_error_response(
+                message="数据库连接错误: 未提供有效的SQLite数据库URL",
+                context={"db_url": db_url, "business_db_url": self.business_db_url, "query": query}
+            )
+            raise Exception(error_response.to_json())
         
         # Check if database file exists
         import os
@@ -505,7 +566,24 @@ class DataResolver:
                 if query.strip().upper().startswith('SELECT'):
                     columns = [desc[0] for desc in cursor.description]
                     rows = cursor.fetchall()
-                    return [dict(zip(columns, row)) for row in rows]
+                    result = [dict(zip(columns, row)) for row in rows]
+                    
+                    # If there are no results, return None
+                    if not result:
+                        return None
+                    
+                    # If there's only one row, return the dictionary directly
+                    if len(result) == 1:
+                        row = result[0]
+                        # If it's a single column result (like COUNT(*), MAX(id), etc.), return the value directly
+                        if len(row) == 1:
+                            # Get the first (and only) column value
+                            return list(row.values())[0]
+                        # Otherwise return the full row dictionary
+                        return row
+                    
+                    # If there are multiple rows, return the list of dictionaries
+                    return result
                 else:
                     # For other queries, return the number of affected rows
                     conn.commit()
@@ -603,6 +681,11 @@ class DataResolver:
         # Use the provided db_url or fall back to business database URL
         connection_url = db_url if db_url else self.business_db_url
         if not connection_url:
+            # Try to get from environment variables
+            import os
+            connection_url = os.environ.get('BUSINESS_DB_URL')
+            
+        if not connection_url:
             error_response = create_database_connection_error_response(
                 message="No database URL provided for MySQL connection",
                 context={"query": query}
@@ -615,14 +698,14 @@ class DataResolver:
                 connection_url = connection_url.replace('mysql+pymysql://', 'mysql://')
             
             # Parse connection URL to extract components
-            from urllib.parse import urlparse
+            from urllib.parse import urlparse, unquote
             parsed = urlparse(connection_url)
             
             # Extract connection parameters
             host = parsed.hostname or 'localhost'
             port = parsed.port or 3306
             username = parsed.username
-            password = parsed.password
+            password = unquote(parsed.password) if parsed.password else None
             database = parsed.path.lstrip('/') if parsed.path else None
             
             # Add connection timeout to avoid hanging
