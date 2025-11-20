@@ -39,9 +39,38 @@ class DataResolver:
         self.business_db_url = business_db_url
         self._business_db_connection = None
     
+    def _get_nested_value(self, data: Dict[str, Any], path: str) -> Any:
+        """
+        Get a nested value from a dictionary using dot notation.
+        
+        Args:
+            data: Dictionary to get value from
+            path: Dot-separated path to the value (e.g., "user.profile.age")
+            
+        Returns:
+            The value at the path or None if not found
+        """
+        if not path:
+            return None
+            
+        parts = path.split('.')
+        value = data
+        
+        try:
+            for part in parts:
+                if isinstance(value, dict) and part in value:
+                    value = value[part]
+                elif isinstance(value, list) and part.isdigit() and int(part) < len(value):
+                    value = value[int(part)]
+                else:
+                    return None
+            return value
+        except (KeyError, TypeError, AttributeError, IndexError):
+            return None
+    
     def resolve_data(self, data_request: Dict[str, Any], context: Dict[str, Any]) -> Any:
         """
-        Resolve data based on the data request configuration.
+        Resolve data based on the request configuration.
         
         Args:
             data_request: Data request configuration
@@ -53,6 +82,37 @@ class DataResolver:
         if not isinstance(data_request, dict):
             return None
         
+        # Check for 'source' field first (for backward compatibility)
+        source = data_request.get('source')
+        if source == 'local':
+            # For local source, use query as field path
+            query = data_request.get('query', '')
+            # Remove 'input.' prefix if present
+            if query.startswith('input.'):
+                query = query[6:]
+            value = self._get_nested_value(context, query)
+            
+            # Try to convert to appropriate type if value is a string
+            if isinstance(value, str):
+                # Try to convert to int
+                try:
+                    return int(value)
+                except ValueError:
+                    pass
+                
+                # Try to convert to float
+                try:
+                    return float(value)
+                except ValueError:
+                    pass
+                
+                # Try to convert to bool
+                if value.lower() in ('true', 'false'):
+                    return value.lower() == 'true'
+            
+            return value
+        
+        # Otherwise use 'type' field
         source_type = data_request.get('type', 'context')
         
         if source_type == 'context':

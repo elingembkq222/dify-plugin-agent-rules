@@ -180,14 +180,60 @@ class RuleEngine:
                 're': re,
             }
             
+            # Create a copy of context with type conversion
+            converted_context = {}
+            for key, value in context.items():
+                if isinstance(value, str):
+                    # Try to convert to int
+                    try:
+                        converted_context[key] = int(value)
+                        continue
+                    except ValueError:
+                        pass
+                    
+                    # Try to convert to float
+                    try:
+                        converted_context[key] = float(value)
+                        continue
+                    except ValueError:
+                        pass
+                    
+                    # Try to convert to bool
+                    if value.lower() in ('true', 'false'):
+                        converted_context[key] = value.lower() == 'true'
+                        continue
+                
+                # Keep original value if no conversion is needed or possible
+                converted_context[key] = value
+            
+            # Create a custom Input class that allows attribute access
+            class InputWrapper:
+                def __init__(self, data):
+                    self._data = data
+                
+                def __getattr__(self, name):
+                    if name in self._data:
+                        return self._data[name]
+                    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+                
+                def __getitem__(self, key):
+                    return self._data[key]
+                
+                def __contains__(self, key):
+                    return key in self._data
+            
             # Add context variables to the local namespace
-            safe_locals = dict(context)
+            safe_locals = dict(converted_context)
+            
+            # Add 'input' as an InputWrapper instance
+            safe_locals['input'] = InputWrapper(converted_context)
             
             # Evaluate the expression
             result = eval(custom_expr, safe_globals, safe_locals)
             return bool(result)
         except Exception as e:
             # Log error in a real implementation
+            print(f"Error evaluating expression '{custom_expr}': {e}")
             return False
     
     def execute_rule_set(self, rule_set: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
