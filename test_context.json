@@ -1,8 +1,0 @@
-{
-  "product": {
-    "id": "test_product_123",
-    "name": "测试产品",
-    "price": 99.99,
-    "stock": 10
-  }
-}
