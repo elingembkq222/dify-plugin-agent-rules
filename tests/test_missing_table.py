@@ -6,8 +6,8 @@
 import sys
 import os
 
-# 添加当前目录到Python路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 添加项目根目录到Python路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 使用importlib动态导入模块
 import importlib.util
@@ -31,7 +31,7 @@ def test_missing_table():
     print("测试数据表不存在的情况...")
     
     # 创建规则引擎实例，使用一个不存在的数据库文件
-    engine = RuleEngine("sqlite:///test_business.db")
+    engine = RuleEngine("sqlite:///tests/test_business.db")
     
     # 测试规则配置 - 查询不存在的表
     rule = {

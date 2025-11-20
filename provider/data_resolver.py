@@ -326,40 +326,74 @@ class DataResolver:
             # Default to SQLite database
             db_path = "rule_engine.db"
         
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row  # Enable column access by name
-        cursor = conn.cursor()
+        # Debug: Print the db_path
+        print(f"DEBUG: SQLite db_path = {db_path}")
+        
+        # Check if database file exists
+        import os
+        if not os.path.exists(db_path):
+            print(f"DEBUG: Database file does not exist: {db_path}")
+            raise Exception(f"数据库连接错误: 数据库文件不存在: {db_path}")
         
         try:
-            cursor.execute(query)
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row  # Enable column access by name
+            cursor = conn.cursor()
             
-            # For SELECT queries, return the results
-            if query.strip().upper().startswith('SELECT'):
-                rows = cursor.fetchall()
-                result = [dict(row) for row in rows]
+            try:
+                cursor.execute(query)
                 
-                # If there are no results, return None
-                if not result:
-                    return None
-                
-                # If there's only one row, return the dictionary directly
-                if len(result) == 1:
-                    row = result[0]
-                    # If it's a single column result (like COUNT(*), MAX(id), etc.), return the value directly
-                    if len(row) == 1:
-                        # Get the first (and only) column value
-                        return list(row.values())[0]
-                    # Otherwise return the full row dictionary
-                    return row
-                
-                # If there are multiple rows, return the list of dictionaries
-                return result
+                # For SELECT queries, return the results
+                if query.strip().upper().startswith('SELECT'):
+                    rows = cursor.fetchall()
+                    result = [dict(row) for row in rows]
+                    
+                    # If there are no results, return None
+                    if not result:
+                        return None
+                    
+                    # If there's only one row, return the dictionary directly
+                    if len(result) == 1:
+                        row = result[0]
+                        # If it's a single column result (like COUNT(*), MAX(id), etc.), return the value directly
+                        if len(row) == 1:
+                            # Get the first (and only) column value
+                            return list(row.values())[0]
+                        # Otherwise return the full row dictionary
+                        return row
+                    
+                    # If there are multiple rows, return the list of dictionaries
+                    return result
+                else:
+                    # For other queries, return the number of affected rows
+                    conn.commit()
+                    return cursor.rowcount
+            finally:
+                conn.close()
+        except sqlite3.Error as e:
+            # Handle SQLite specific errors
+            error_msg = str(e)
+            print(f"DEBUG: SQLite error: {error_msg}")
+            
+            # Check for table not found error
+            if "no such table" in error_msg.lower():
+                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+            # Check for database connection errors
+            elif "unable to open database file" in error_msg.lower():
+                raise Exception(f"数据库连接错误: 无法打开数据库文件: {db_path}") from e
+            # Check for permission errors
+            elif "permission denied" in error_msg.lower():
+                raise Exception(f"数据库连接错误: 权限不足，无法访问数据库文件: {db_path}") from e
+            # General database error
             else:
-                # For other queries, return the number of affected rows
-                conn.commit()
-                return cursor.rowcount
-        finally:
-            conn.close()
+                raise Exception(f"数据库错误: {error_msg}") from e
+        except Exception as e:
+            # Handle other exceptions
+            print(f"DEBUG: General exception: {str(e)}")
+            if "no such table" in str(e).lower():
+                raise Exception(f"数据库表不存在错误: {e}") from e
+            else:
+                raise Exception(f"数据库错误: {e}") from e
     
     def _query_postgresql(self, query: str, db_url: Optional[str] = None) -> Any:
         """
@@ -380,23 +414,60 @@ class DataResolver:
         if not connection_url:
             raise ValueError("No database URL provided for PostgreSQL connection")
         
-        conn = psycopg2.connect(connection_url)
-        cursor = conn.cursor()
-        
         try:
-            cursor.execute(query)
+            # Add connection timeout to avoid hanging
+            conn = psycopg2.connect(
+                connection_url,
+                connect_timeout=5
+            )
+            cursor = conn.cursor()
             
-            # For SELECT queries, return the results
-            if query.strip().upper().startswith('SELECT'):
-                columns = [desc[0] for desc in cursor.description]
-                rows = cursor.fetchall()
-                return [dict(zip(columns, row)) for row in rows]
+            try:
+                cursor.execute(query)
+                
+                # For SELECT queries, return the results
+                if query.strip().upper().startswith('SELECT'):
+                    columns = [desc[0] for desc in cursor.description]
+                    rows = cursor.fetchall()
+                    return [dict(zip(columns, row)) for row in rows]
+                else:
+                    # For other queries, return the number of affected rows
+                    conn.commit()
+                    return cursor.rowcount
+            finally:
+                conn.close()
+        except psycopg2.Error as e:
+            # Handle PostgreSQL specific errors with more detailed classification
+            error_msg = str(e)
+            error_code = getattr(e, 'pgcode', None)
+            
+            # Table doesn't exist error (PostgreSQL error code 42P01)
+            if error_code == '42P01' or "relation" in error_msg.lower() and "does not exist" in error_msg.lower():
+                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+            # Connection errors
+            elif "connection" in error_msg.lower() or "could not connect" in error_msg.lower() or "timeout" in error_msg.lower():
+                raise Exception(f"数据库连接错误: {error_msg}") from e
+            # Database doesn't exist error (PostgreSQL error code 08006)
+            elif error_code == '08006' or "database" in error_msg.lower() and "does not exist" in error_msg.lower():
+                raise Exception(f"数据库连接错误: 数据库不存在: {error_msg}") from e
+            # Authentication error (PostgreSQL error code 28P01)
+            elif error_code == '28P01' or "password authentication failed" in error_msg.lower():
+                raise Exception(f"数据库连接错误: 认证失败: {error_msg}") from e
+            # Syntax errors (PostgreSQL error code 42601)
+            elif error_code == '42601' or "syntax error" in error_msg.lower():
+                raise Exception(f"SQL语法错误: {error_msg}") from e
+            # Other PostgreSQL errors
             else:
-                # For other queries, return the number of affected rows
-                conn.commit()
-                return cursor.rowcount
-        finally:
-            conn.close()
+                raise Exception(f"数据库错误: {error_msg}") from e
+        except Exception as e:
+            # Handle other exceptions
+            error_msg = str(e)
+            if "no such table" in error_msg.lower() or "relation" in error_msg.lower() and "does not exist" in error_msg.lower():
+                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+            elif "connection" in error_msg.lower() or "could not connect" in error_msg.lower():
+                raise Exception(f"数据库连接错误: {error_msg}") from e
+            else:
+                raise Exception(f"数据库错误: {error_msg}") from e
     
     def _query_mysql(self, query: str, db_url: Optional[str] = None) -> Any:
         """
@@ -424,7 +495,28 @@ class DataResolver:
             if connection_url.startswith('mysql+pymysql://'):
                 connection_url = connection_url.replace('mysql+pymysql://', 'mysql://')
             
-            conn = pymysql.connect(connection_url)
+            # Parse connection URL to extract components
+            from urllib.parse import urlparse
+            parsed = urlparse(connection_url)
+            
+            # Extract connection parameters
+            host = parsed.hostname or 'localhost'
+            port = parsed.port or 3306
+            username = parsed.username
+            password = parsed.password
+            database = parsed.path.lstrip('/') if parsed.path else None
+            
+            # Add connection timeout to avoid hanging
+            conn = pymysql.connect(
+                host=host,
+                port=port,
+                user=username,
+                password=password,
+                database=database,
+                connect_timeout=5,
+                read_timeout=10,
+                write_timeout=10
+            )
             cursor = conn.cursor()
             
             try:
@@ -441,19 +533,38 @@ class DataResolver:
                     return cursor.rowcount
             finally:
                 conn.close()
+        except pymysql.Error as e:
+            # Handle MySQL specific errors with more detailed classification
+            error_msg = str(e)
+            error_code = getattr(e, 'args', (0, ))[0] if hasattr(e, 'args') and e.args else 0
+            
+            # Table doesn't exist error (MySQL error code 1146)
+            if error_code == 1146 or "no such table" in error_msg.lower() or "table" in error_msg.lower() and "doesn't exist" in error_msg.lower():
+                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+            # Connection errors (MySQL error codes in 2000s)
+            elif error_code >= 2000 or "connection" in error_msg.lower() or "can't connect" in error_msg.lower() or "access denied" in error_msg.lower() or "timeout" in error_msg.lower():
+                raise Exception(f"数据库连接错误: {error_msg}") from e
+            # Syntax errors (MySQL error code 1064)
+            elif error_code == 1064 or "syntax error" in error_msg.lower():
+                raise Exception(f"SQL语法错误: {error_msg}") from e
+            # Database doesn't exist error (MySQL error code 1049)
+            elif error_code == 1049 or "unknown database" in error_msg.lower():
+                raise Exception(f"数据库连接错误: 数据库不存在: {error_msg}") from e
+            # Authentication error (MySQL error code 1045)
+            elif error_code == 1045 or "access denied for user" in error_msg.lower():
+                raise Exception(f"数据库连接错误: 认证失败: {error_msg}") from e
+            # Other MySQL errors
+            else:
+                raise Exception(f"数据库错误: {error_msg}") from e
         except Exception as e:
-            # Re-raise the exception to make database errors visible
-            error_msg = f"Error executing MySQL query: {e}"
-            
-            # Add more context for database errors
-            if "no such table" in str(e).lower():
-                error_msg = f"数据库表不存在错误: {e}"
-            elif "connection" in str(e).lower() or "can't connect" in str(e).lower() or "access denied" in str(e).lower():
-                error_msg = f"数据库连接错误: {e}"
-            elif "syntax error" in str(e).lower():
-                error_msg = f"SQL语法错误: {e}"
-            
-            raise Exception(error_msg) from e
+            # Handle other exceptions
+            error_msg = str(e)
+            if "no such table" in error_msg.lower():
+                raise Exception(f"数据库表不存在错误: {error_msg}") from e
+            elif "connection" in error_msg.lower() or "can't connect" in error_msg.lower():
+                raise Exception(f"数据库连接错误: {error_msg}") from e
+            else:
+                raise Exception(f"数据库错误: {error_msg}") from e
     
     def _replace_placeholders(self, text: str, context: Dict[str, Any]) -> str:
         """

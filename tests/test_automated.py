@@ -118,8 +118,8 @@ class TestMultiDatabaseSupport(unittest.TestCase):
     
     def setUp(self):
         """测试前的设置"""
-        self.business_db_url = "mysql+pymysql://user:password@localhost:3306/business_db"
-        self.rule_db_url = "mysql+pymysql://user:password@localhost:3306/rule_db"
+        self.business_db_url = "sqlite:///tests/test_business.db"
+        self.rule_db_url = "sqlite:///tests/rule_engine.db"
         self.wrong_db_url = "mysql+pymysql://user:wrongpassword@localhost:3306/nonexistent_db"
     
     def test_data_resolver_with_two_db_urls(self):

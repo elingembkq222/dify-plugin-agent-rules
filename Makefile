@@ -1,4 +1,4 @@
-.PHONY: help test test-verbose test-automated test-db-connection test-missing-table test-comprehensive test-api test-generate-rule test-uuid test-uuid-validation clean install
+.PHONY: help test test-verbose test-automated test-missing-table test-comprehensive test-api test-generate-rule test-uuid test-uuid-validation clean install
 
 # 默认目标
 help:
@@ -6,7 +6,6 @@ help:
 	@echo "  make test              - 运行所有测试"
 	@echo "  make test-verbose      - 运行所有测试(详细输出)"
 	@echo "  make test-automated    - 运行自动化测试套件"
-	@echo "  make test-db-connection - 运行数据库连接错误测试"
 	@echo "  make test-missing-table - 运行数据表不存在测试"
 	@echo "  make test-comprehensive - 运行全面数据库错误测试"
 	@echo "  make test-api          - 运行API测试"
@@ -33,10 +32,6 @@ test-verbose:
 # 运行自动化测试套件
 test-automated:
 	python tests/test_automated.py
-
-# 运行数据库连接错误测试
-test-db-connection:
-	python tests/test_db_connection_error.py
 
 # 运行数据表不存在测试
 test-missing-table:
