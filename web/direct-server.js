@@ -153,9 +153,6 @@ app.post('/api/update_rule', (req, res) => {
   if (!rule_raw.id) {
     return res.status(400).json({ error: "Missing rule set ID in request body" });
   }
-  if (!rule_raw.rules) {
-    return res.status(400).json({ error: "Missing rules in request body" });
-  }
 
   // 提取必要的字段
   const rule_data = {
@@ -164,11 +161,13 @@ app.post('/api/update_rule', (req, res) => {
     name: rule_raw.name,
     description: rule_raw.description ?? null,
     applies_when: rule_raw.applies_when ?? null,
-    rules: rule_raw.rules,
     on_fail: rule_raw.on_fail ?? null,
     created_at: rule_raw.created_at,
     updated_at: now
   };
+  if (rule_raw.rules) {
+    rule_data.rules = rule_raw.rules;
+  }
 
   console.log("Prepared rule_data for update:", rule_data);
 

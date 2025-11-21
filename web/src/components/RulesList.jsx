@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Table, Button, Space, Tag, message, Collapse, Modal } from 'antd';
+import { Table, Button, Space, Tag, message, Collapse, Modal, Form, Input } from 'antd';
 import { EditOutlined, DeleteOutlined, ReloadOutlined, CopyOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import { listRules, updateRule, deleteRule } from '../api';
 import RuleExecutionList from './RuleExecutionList';
@@ -11,6 +11,9 @@ const RulesList = () => {
   const [loading, setLoading] = useState(false);
   const [expandedRuleId, setExpandedRuleId] = useState(null);
   const hasFetched = useRef(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editForm] = Form.useForm();
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const fetchRules = (silent = false) => {
     setLoading(true);
@@ -63,8 +66,14 @@ const RulesList = () => {
   };
 
   const handleEdit = (rule) => {
-    // TODO: 实现编辑功能
-    message.info('编辑规则功能待实现');
+    setEditingRecord(rule);
+    editForm.setFieldsValue({
+      target: rule.target,
+      name: rule.name,
+      description: rule.description,
+      applies_when: JSON.stringify(rule.applies_when || [])
+    });
+    setEditModalVisible(true);
   };
 
   const handleCopy = (record) => {
@@ -205,6 +214,59 @@ const RulesList = () => {
         size="middle"
         pagination={{ pageSize: 10 }}
       />
+
+      <Modal
+        title="编辑规则集"
+        visible={editModalVisible}
+        onCancel={() => setEditModalVisible(false)}
+        onOk={() => {
+          editForm
+            .validateFields()
+            .then((values) => {
+              let applies_when = [];
+              if (typeof values.applies_when === 'string') {
+                const t = values.applies_when.trim();
+                if (t.length > 0) {
+                  try { applies_when = JSON.parse(t); } catch { applies_when = []; }
+                }
+              }
+              const payload = {
+                id: editingRecord.id,
+                target: values.target,
+                name: values.name,
+                description: values.description,
+                applies_when
+              };
+              return updateRule(payload)
+                .then(() => {
+                  message.success('规则集已更新');
+                  setEditModalVisible(false);
+                  fetchRules(true);
+                })
+                .catch((err) => {
+                  message.error('更新失败');
+                  console.error('Edit ruleset failed:', err);
+                });
+            });
+        }}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={editForm} layout="vertical">
+          <Form.Item name="target" label="目标" rules={[{ required: true, message: '请输入目标' }]}> 
+            <Input placeholder="例如：generic" />
+          </Form.Item>
+          <Form.Item name="name" label="规则集名称" rules={[{ required: true, message: '请输入规则集名称' }]}> 
+            <Input placeholder="例如：一年内消费次数限制" />
+          </Form.Item>
+          <Form.Item name="description" label="描述"> 
+            <Input.TextArea placeholder="例如：一年内消费不能低于三次" rows={3} />
+          </Form.Item>
+          <Form.Item name="applies_when" label="适用条件(JSON数组)"> 
+            <Input.TextArea placeholder="[]" rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* 展开面板显示规则执行列表 */}
       <div style={{ marginTop: 16 }}>

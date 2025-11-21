@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Table, Button, Modal, Form, Input, message, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, UpOutlined, DownOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import { updateRule } from '../api';
+import { updateRule, generateRule } from '../api';
 
 
 
@@ -10,6 +10,8 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
   const [rules, setRules] = useState(ruleSet.rules || []);
   const [editingRule, setEditingRule] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [llmQuery, setLlmQuery] = useState('');
+  const [llmLoading, setLlmLoading] = useState(false);
 
   // 打开编辑/新增弹窗
   const showModal = (rule = null) => {
@@ -18,8 +20,8 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
       // 如果是编辑，填充表单数据
       expandForm.setFieldsValue(rule);
     } else {
-      // 如果是新增，重置表单
       expandForm.resetFields();
+      setLlmQuery('');
     }
     setIsModalVisible(true);
   };
@@ -28,6 +30,33 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
   const handleCancel = () => {
     setIsModalVisible(false);
     setEditingRule(null);
+  };
+
+  const handleLlmGenerate = () => {
+    if (!llmQuery || llmQuery.trim().length === 0) {
+      message.warning('请输入自然语言规则');
+      return;
+    }
+    setLlmLoading(true);
+    generateRule({ query: llmQuery, target: ruleSet.target })
+      .then((res) => {
+        const data = res.data || {};
+        const rule = data.rule || (data.result && data.result.rule) || {};
+        const fields = {
+          name: rule.name || '',
+          type: rule.type || '',
+          description: rule.description || '',
+          expression: rule.expression || '',
+          message: rule.message || ''
+        };
+        expandForm.setFieldsValue(fields);
+        message.success('已根据自然语言生成执行规则');
+      })
+      .catch((err) => {
+        message.error('生成失败');
+        console.error('LLM generate error:', err);
+      })
+      .finally(() => setLlmLoading(false));
   };
 
   // 保存规则
@@ -180,7 +209,7 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()}>新增规则</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()}>新增执行规则</Button>
         {rules.length > 1 && (
           <Button style={{ marginLeft: 16 }} type="default" icon={<SaveOutlined />} onClick={saveOrder}>保存顺序</Button>
         )}
@@ -207,8 +236,19 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
         ]}
         width={800}
       >
+        <div style={{ marginBottom: 12 }}>
+          <Input.TextArea
+            value={llmQuery}
+            onChange={(e) => setLlmQuery(e.target.value)}
+            placeholder="请输入自然语言规则，例如：一年内用户消费次数不得超过3次"
+            rows={3}
+          />
+          <div style={{ marginTop: 8 }}>
+            <Button type="default" loading={llmLoading} onClick={handleLlmGenerate}>智能生成</Button>
+          </div>
+        </div>
         <Form form={expandForm} layout="vertical">
-          <Form.Item name="name" label="执行规则名称" rules={[{ required: true, message: '请输入执行规则名称' }]}>
+          <Form.Item name="name" label="执行规则名称" rules={[{ required: true, message: '请输入执行规则名称' }]}> 
             <Input placeholder="请输入执行规则名称" />
           </Form.Item>
           <Form.Item name="type" label="规则类型" rules={[{ required: true, message: '请输入规则类型' }]}>

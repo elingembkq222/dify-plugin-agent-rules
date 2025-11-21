@@ -35,6 +35,8 @@ class LLMQueryParser:
         self.aliyun_llm_model = os.getenv("ALIYUN_LLM_MODEL", "qwen-7b-chat-turbo")
         # Load system prompt
         self.system_prompt = self._get_system_prompt()
+        # Load execution rule prompt
+        self.execution_rule_prompt = self._get_execution_rule_prompt()
     
     def parse_query_to_rule(self, query: str, context: Dict[str, Any], 
                            llm_invoker: Any = None) -> Dict[str, Any]:
@@ -217,6 +219,24 @@ class LLMQueryParser:
         with open(prompt_file_path, 'r', encoding='utf-8') as f:
             return f.read().strip()
     
+    def _get_execution_rule_prompt(self) -> str:
+        """
+        Get the execution rule prompt for generating single rule forms.
+        """
+        try:
+            prompt_file_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "../prompts/execution_rule_prompt.txt"
+            )
+            with open(prompt_file_path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except Exception:
+            # Fallback minimal constraints if prompt file not found
+            return (
+                "仅返回JSON，键包含name,type,description,expression,message五项。表达式使用input.或context.命名空间，"
+                "例如金额使用input.transaction_amount。不要输出说明文本或代码块。"
+            )
+    
     def _create_rule_generation_prompt(self, query: str, context: Dict[str, Any]) -> str:
         """
         Create a prompt for generating a single rule.
@@ -228,18 +248,13 @@ class LLMQueryParser:
         Returns:
             Prompt string
         """
-        context_str = json.dumps(context, indent=2)
-        
-        return f"""
-Convert the following natural language query into a rule expression:
-
-Query: {query}
-
-Context data structure:
-{context_str}
-
-Please generate a valid JSON rule expression that captures the intent of the query.
-"""
+        context_str = json.dumps(context, indent=2, ensure_ascii=False)
+        constraints = self.execution_rule_prompt
+        return (
+f"{constraints}\n\n"
+f"Query: {query}\n\n"
+f"Context data structure (for reference):\n{context_str}\n"
+        )
     
     def _create_ruleset_generation_prompt(self, query: str, context: Dict[str, Any]) -> str:
         """
