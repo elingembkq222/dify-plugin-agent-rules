@@ -194,9 +194,9 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
         size="middle"
       />
 
-      {/* 编辑/新增规则弹窗 */}
+      {/* 编辑/新增执行规则弹窗 */}
       <Modal
-        title={editingRule ? '编辑规则' : '新增规则'}
+        title={editingRule ? '编辑执行规则' : '新增执行规则'}
         visible={isModalVisible}
         onCancel={handleCancel}
         footer={[
@@ -208,8 +208,8 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
         width={800}
       >
         <Form form={expandForm} layout="vertical">
-          <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
-            <Input placeholder="请输入规则名称" />
+          <Form.Item name="name" label="执行规则名称" rules={[{ required: true, message: '请输入执行规则名称' }]}>
+            <Input placeholder="请输入执行规则名称" />
           </Form.Item>
           <Form.Item name="type" label="规则类型" rules={[{ required: true, message: '请输入规则类型' }]}>
             <Input placeholder="请输入规则类型，如 accumulation" />
