@@ -306,6 +306,12 @@ class RuleEngine:
             # 替换表达式中的变量占位符
             substituted_expr = self.data_resolver._replace_placeholders(custom_expr, wrapped_context)
 
+            # 去除常见单位词，确保比较表达式可被安全评估
+            for unit in ['year', 'years', 'day', 'days', 'month', 'months']:
+                substituted_expr = re.sub(rf'\b{unit}\b', '', substituted_expr)
+            # 规范多余空格
+            substituted_expr = re.sub(r'\s+', ' ', substituted_expr).strip()
+
             # 如果替换后仍有占位符，尝试直接使用上下文变量
             if '{{' in substituted_expr and '}}' in substituted_expr:
                 # 创建一个包含所有上下文变量的字典
@@ -446,31 +452,97 @@ class RuleEngine:
                 'error': 'Invalid rule set'
             }
         
-        # Check if applies_when conditions are met
+        # Check applies_when conditions (support requires + expression)
         applies_when = rule_set.get('applies_when', [])
         if applies_when is None:
             applies_when = []
-            
-        for condition in applies_when:
-            if not isinstance(condition, dict):
-                continue
+        if applies_when:
+            for condition in applies_when:
+                if not isinstance(condition, dict):
+                    continue
+                # If condition provides requires + expression, resolve then evaluate
+                cond_requires = condition.get('requires', [])
+                cond_expr = condition.get('expression')
+                cond_message = condition.get('message') or '规则集前置条件不满足'
+                cond_id = condition.get('id', 'applies_condition')
                 
-            field = condition.get('field')
-            operator = condition.get('operator')
-            value = condition.get('value')
-            
-            if not field or not operator or value is None:
-                continue
-                
-            actual_value = self.data_resolver.resolve_data({'name': 'field_value', 'source': 'context', 'field': field}, context)
-            if not self._evaluate_operation(operator, actual_value, value, context):
-                # Conditions not met, rule set does not apply
-                return {
-                    'pass': True,  # Rule set doesn't apply, so no violation
-                    'violations': [],
-                    'message': 'Rule set conditions not met',
-                    'applies': False
-                }
+                if cond_requires and cond_expr:
+                    # Build a dedicated condition context based on the incoming context
+                    condition_context = dict(context)
+                    source_priority = {'function': 0, 'local': 1, 'context': 2, 'rule_db': 3, 'db': 4, 'api': 5}
+                    cond_requires = sorted(cond_requires, key=lambda r: source_priority.get(r.get('source', 'context'), 9))
+                    try:
+                        for req in cond_requires:
+                            if isinstance(req, dict) and 'name' in req:
+                                if 'type' not in req:
+                                    req['type'] = 'context'
+                                req_result = self.data_resolver.resolve_data(req, condition_context)
+                                if req_result is not None:
+                                    condition_context[req['name']] = req_result
+                        # Evaluate expression
+                        passed = self.evaluate_expression(cond_expr, condition_context)
+                        if not passed.get('result', False):
+                            return {
+                                'pass': False,
+                                'violations': [{
+                                    'id': cond_id,
+                                    'pass': False,
+                                    'message': cond_message,
+                                }],
+                                'results': [{
+                                    'id': cond_id,
+                                    'pass': False,
+                                    'message': cond_message,
+                                }],
+                                'rule_set_id': rule_set.get('id'),
+                                'rule_set_name': rule_set.get('name'),
+                                'on_fail': rule_set.get('on_fail', {'action': 'block', 'notify': ['user']}),
+                                'applies': False
+                            }
+                    except Exception as e:
+                        # Treat condition evaluation failure as not applicable
+                        return {
+                            'pass': False,
+                            'violations': [{
+                                'id': cond_id,
+                                'pass': False,
+                                'message': cond_message,
+                            }],
+                            'results': [{
+                                'id': cond_id,
+                                'pass': False,
+                                'message': cond_message,
+                            }],
+                            'rule_set_id': rule_set.get('id'),
+                            'rule_set_name': rule_set.get('name'),
+                            'on_fail': rule_set.get('on_fail', {'action': 'block', 'notify': ['user']}),
+                            'applies': False
+                        }
+                else:
+                    # Backward compatible: field/operator/value
+                    field = condition.get('field')
+                    operator = condition.get('operator')
+                    value = condition.get('value')
+                    if field and operator and value is not None:
+                        actual_value = self.data_resolver.resolve_data({'name': 'field_value', 'source': 'context', 'field': field}, context)
+                        if not self._evaluate_operation(operator, actual_value, value, context):
+                            return {
+                                'pass': False,
+                                'violations': [{
+                                    'id': cond_id,
+                                    'pass': False,
+                                    'message': cond_message,
+                                }],
+                                'results': [{
+                                    'id': cond_id,
+                                    'pass': False,
+                                    'message': cond_message,
+                                }],
+                                'rule_set_id': rule_set.get('id'),
+                                'rule_set_name': rule_set.get('name'),
+                                'on_fail': rule_set.get('on_fail', {'action': 'block', 'notify': ['user']}),
+                                'applies': False
+                            }
         
         # Resolve any required data for the rule set
         resolved_context = dict(context)
@@ -481,6 +553,8 @@ class RuleEngine:
         # Add any additional data required by the rules
         requires = rule_set.get('requires', [])
         if requires:
+            source_priority = {'function': 0, 'local': 1, 'context': 2, 'rule_db': 3, 'db': 4, 'api': 5}
+            requires = sorted(requires, key=lambda r: source_priority.get(r.get('source', 'context'), 9))
             for req in requires:
                 if isinstance(req, dict) and 'name' in req:
                     # Ensure the request has a type, default to 'context' if not specified
@@ -543,13 +617,16 @@ class RuleEngine:
                 # Resolve any required data for this specific rule
                 rule_requires = rule.get('requires', [])
                 if rule_requires:
+                    # 优先解析非数据库来源，保证占位符有值
+                    source_priority = {'function': 0, 'local': 1, 'context': 2, 'rule_db': 3, 'db': 4, 'api': 5}
+                    rule_requires = sorted(rule_requires, key=lambda r: source_priority.get(r.get('source', 'context'), 9))
                     for req in rule_requires:
                         if isinstance(req, dict) and 'name' in req:
                             # Ensure the request has a type, default to 'context' if not specified
                             if 'type' not in req:
                                 req['type'] = 'context'
                             try:
-                                req_result = self.data_resolver.resolve_data(req, context)
+                                req_result = self.data_resolver.resolve_data(req, rule_context)
                                 if req_result is not None:
                                     rule_context[req['name']] = req_result
                             except Exception as e:

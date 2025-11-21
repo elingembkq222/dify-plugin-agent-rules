@@ -39,6 +39,10 @@ class DataResolver:
             return self._resolve_from_api(requirement, context)
         elif source == 'context':
             return self._resolve_from_context(requirement, context)
+        elif source == 'local':
+            return self._resolve_from_local(requirement, context)
+        elif source == 'function':
+            return self._resolve_from_function(requirement, context)
         
         return None
 
@@ -70,6 +74,7 @@ class DataResolver:
                 elif transform == 'count':
                     row = result.fetchone()
                     return row[0] if row else 0
+                
                 else:
                     rows = result.fetchall()
                     if len(rows) == 1:
@@ -79,7 +84,13 @@ class DataResolver:
                         except Exception:
                             return row[0] if len(row) == 1 else row
                         if len(mapping) == 1:
-                            return next(iter(mapping.values()))
+                            val = next(iter(mapping.values()))
+                            if isinstance(val, (str, bytes)):
+                                try:
+                                    return float(val)
+                                except Exception:
+                                    return val
+                            return val
                         return mapping
                     return [dict(r._mapping) for r in rows]
         except Exception as e:
@@ -96,6 +107,24 @@ class DataResolver:
         if not field:
             return None
         return self._get_nested_value(context, field)
+    
+    def _resolve_from_local(self, requirement: Dict[str, Any], context: Dict[str, Any]) -> Any:
+        """从本地上下文解析数据，query为字段路径"""
+        query = requirement.get('query') or requirement.get('field')
+        if not query:
+            return None
+        return self._get_nested_value(context, query)
+
+    def _resolve_from_function(self, requirement: Dict[str, Any], context: Dict[str, Any]) -> Any:
+        """支持简单函数解析，如 get_current_year()"""
+        func = requirement.get('query')
+        if not func:
+            return None
+        func = func.strip()
+        if func.startswith('get_current_year'):
+            import datetime
+            return datetime.datetime.now().year
+        return None
         
     def _replace_placeholders(self, text: str, context: Dict[str, Any]) -> str:
         """用上下文中的值替换占位符 {{...}}"""
