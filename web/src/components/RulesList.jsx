@@ -8,19 +8,42 @@ const { Panel } = Collapse;
 
 const RulesList = () => {
   const [rules, setRules] = useState([]);
+  const [filteredRules, setFilteredRules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedRuleId, setExpandedRuleId] = useState(null);
   const hasFetched = useRef(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editForm] = Form.useForm();
   const [editingRecord, setEditingRecord] = useState(null);
+  const [searchForm] = Form.useForm();
+
+  const filterData = (data, values) => {
+    const id = (values.id || '').trim();
+    const name = (values.name || '').trim();
+    const target = (values.target || '').trim();
+    const description = (values.description || '').trim();
+    const created_at = (values.created_at || '').trim();
+    const updated_at = (values.updated_at || '').trim();
+    const includes = (a, b) => !b || (a || '').toLowerCase().includes(b.toLowerCase());
+    return data.filter(rs => (
+      includes(String(rs.id || ''), id) &&
+      includes(String(rs.name || ''), name) &&
+      includes(String(rs.target || ''), target) &&
+      includes(String(rs.description || ''), description) &&
+      includes(String(rs.created_at || ''), created_at) &&
+      includes(String(rs.updated_at || ''), updated_at)
+    ));
+  };
 
   const fetchRules = (silent = false) => {
     setLoading(true);
     listRules()
       .then(response => {
         console.log('API响应:', response.data);
-        setRules(response.data.rulesets || response.data.rules || []);
+        const next = response.data.rulesets || response.data.rules || [];
+        setRules(next);
+        const values = searchForm.getFieldsValue();
+        setFilteredRules(filterData(next, values));
         if (!silent) message.success('规则列表加载成功');
       })
       .catch(error => {
@@ -87,6 +110,16 @@ const RulesList = () => {
     }
   };
 
+  const handleCopyId = (id) => {
+    try {
+      navigator.clipboard.writeText(id);
+      message.success('规则集ID已复制');
+    } catch (error) {
+      message.error('复制失败');
+      console.error('复制失败:', error);
+    }
+  };
+
   const handleViewExecutionList = (ruleId) => {
     if (expandedRuleId === ruleId) {
       setExpandedRuleId(null);
@@ -115,6 +148,9 @@ const RulesList = () => {
       dataIndex: 'id',
       key: 'id',
       ellipsis: true,
+      render: (id) => (
+        <Button type="link" onClick={() => handleCopyId(id)}>{id}</Button>
+      )
     },
     {
       title: '规则名称',
@@ -205,9 +241,32 @@ const RulesList = () => {
         >
           刷新规则列表
         </Button>
+        <Form form={searchForm} layout="inline" style={{ marginTop: 12 }}>
+          <Form.Item name="id" label="ID">
+            <Input allowClear placeholder="按ID搜索" onChange={() => setFilteredRules(filterData(rules, searchForm.getFieldsValue()))} />
+          </Form.Item>
+          <Form.Item name="name" label="名称">
+            <Input allowClear placeholder="按名称搜索" onChange={() => setFilteredRules(filterData(rules, searchForm.getFieldsValue()))} />
+          </Form.Item>
+          <Form.Item name="target" label="目标">
+            <Input allowClear placeholder="按目标搜索" onChange={() => setFilteredRules(filterData(rules, searchForm.getFieldsValue()))} />
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input allowClear placeholder="按描述搜索" onChange={() => setFilteredRules(filterData(rules, searchForm.getFieldsValue()))} />
+          </Form.Item>
+          <Form.Item name="created_at" label="创建时间">
+            <Input allowClear placeholder="按创建时间搜索" onChange={() => setFilteredRules(filterData(rules, searchForm.getFieldsValue()))} />
+          </Form.Item>
+          <Form.Item name="updated_at" label="更新时间">
+            <Input allowClear placeholder="按更新时间搜索" onChange={() => setFilteredRules(filterData(rules, searchForm.getFieldsValue()))} />
+          </Form.Item>
+          <Form.Item>
+            <Button onClick={() => { searchForm.resetFields(); setFilteredRules(rules); }}>清空过滤</Button>
+          </Form.Item>
+        </Form>
       </div>
       <Table
-        dataSource={rules}
+        dataSource={filteredRules}
         columns={columns}
         rowKey="id"
         bordered
