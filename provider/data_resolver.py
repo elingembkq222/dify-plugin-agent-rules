@@ -85,6 +85,8 @@ class DataResolver:
                             return row[0] if len(row) == 1 else row
                         if len(mapping) == 1:
                             val = next(iter(mapping.values()))
+                            if val is None:
+                                return 0
                             if isinstance(val, (str, bytes)):
                                 try:
                                     return float(val)
