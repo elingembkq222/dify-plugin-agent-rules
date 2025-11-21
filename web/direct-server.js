@@ -15,6 +15,7 @@ app.post('/api/generate_rule_from_query', (req, res) => {
   const rule_raw = req.body;
   const query = rule_raw.query;
   const target = rule_raw.target;
+  const type = (rule_raw.type || 'ruleset').toLowerCase();
 
   // Python 直接接收 JSON，不做任何转义处理
   const pythonProcess = spawn('python3', [
@@ -22,29 +23,30 @@ app.post('/api/generate_rule_from_query', (req, res) => {
     `
 import json, os
 from dotenv import load_dotenv
-from provider.llm_query_parser import parse_query_to_rule
+from provider.llm_query_parser import parse_query_to_rule, parse_query_to_ruleset
 from provider.rule_storage import generate_rule_id
 
 load_dotenv()
 
-# Create a context dictionary with the target
 context = {"target": """${target}"""}
 
-# Call parse_query_to_rule with None for llm_invoker since it's deprecated
-rule = parse_query_to_rule("""${query}""", context, None)
+if "${type}" in ["ruleset", "rule_set"]:
+    result = parse_query_to_ruleset("""${query}""", context)
+else:
+    result = parse_query_to_rule("""${query}""", context, None)
 
-# 确保规则有 ID
-if "id" not in rule:
-    rule["id"] = generate_rule_id()
-
-# 确保每个规则都有 ID
-for i, sub_rule in enumerate(rule.get("rules", [])):
-    if "id" not in sub_rule:
-        sub_rule["id"] = generate_rule_id()
+# 标准化返回：确保包含ID与子规则ID
+if isinstance(result, dict):
+    if "id" not in result:
+        result["id"] = generate_rule_id()
+    if isinstance(result.get("rules"), list):
+        for sub_rule in result["rules"]:
+            if isinstance(sub_rule, dict) and "id" not in sub_rule:
+                sub_rule["id"] = generate_rule_id()
 
 print(json.dumps({
   "success": True,
-  "rule": rule
+  "rule": result
 }, ensure_ascii=False))
     `
   ], { cwd: '../' });

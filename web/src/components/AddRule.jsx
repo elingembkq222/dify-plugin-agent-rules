@@ -16,7 +16,7 @@ const AddRule = () => {
     setLoading(true);
     form.validateFields(['query'])
       .then(values => {
-        return generateRule(values);
+        return generateRule({ ...values, target: 'generic', type: 'ruleset' });
       })
       .then(generateResponse => {
         const generatedResult = generateResponse.data;

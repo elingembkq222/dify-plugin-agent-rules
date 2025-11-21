@@ -38,7 +38,7 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
       return;
     }
     setLlmLoading(true);
-    generateRule({ query: llmQuery, target: ruleSet.target })
+    generateRule({ query: llmQuery, target: ruleSet.target, type: 'execution_rule' })
       .then((res) => {
         const data = res.data || {};
         const rule = data.rule || (data.result && data.result.rule) || {};
