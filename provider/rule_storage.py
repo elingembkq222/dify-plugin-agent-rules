@@ -227,7 +227,7 @@ def list_all_rule_sets() -> List[Dict[str, Any]]:
     """
     db = get_db()
     try:
-        rule_sets = db.query(RuleSet).all()
+        rule_sets = db.query(RuleSet).order_by(RuleSet.created_at.desc(), RuleSet.updated_at.desc()).all()
         return [
             {
                 "id": rs.id,
@@ -237,8 +237,8 @@ def list_all_rule_sets() -> List[Dict[str, Any]]:
                 "applies_when": rs.applies_when or [],
                 "rules": rs.rules,
                 "on_fail": rs.on_fail or {"action": "block", "notify": ["user"]},
-                "created_at": rs.created_at.isoformat() if rs.created_at else None,
-                "updated_at": rs.updated_at.isoformat() if rs.updated_at else None
+                "created_at": rs.created_at.strftime('%Y-%m-%d %H:%M:%S') if rs.created_at else None,
+                "updated_at": rs.updated_at.strftime('%Y-%m-%d %H:%M:%S') if rs.updated_at else None
             }
             for rs in rule_sets
         ]

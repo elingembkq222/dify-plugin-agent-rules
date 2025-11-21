@@ -215,6 +215,57 @@ print(json.dumps({
   });
 });
 
+// 删除规则集
+app.post('/api/delete_rule', (req, res) => {
+  const rule_raw = req.body;
+  const rule_set_id = rule_raw.id;
+  if (!rule_set_id) {
+    return res.status(400).json({ error: "Missing rule set ID in request body" });
+  }
+
+  const pythonProcess = spawn('python3', [
+    '-c',
+    `
+import json, os
+from dotenv import load_dotenv
+from provider.rule_storage import delete_rule_set, init_rule_db
+
+load_dotenv()
+init_rule_db(os.getenv('RULE_DB_URL', 'sqlite:///rule_engine.db'))
+
+rule_set_id = """${rule_set_id}"""
+result = delete_rule_set(rule_set_id)
+
+print(json.dumps({
+  "success": bool(result),
+  "ruleset_id": rule_set_id,
+  "deleted": bool(result)
+}, ensure_ascii=False))
+    `
+  ], { cwd: '../' });
+
+  let output = '';
+  let error = '';
+
+  pythonProcess.stdout.on('data', (d) => { output += d.toString(); });
+  pythonProcess.stderr.on('data', (d) => { error += d.toString(); });
+
+  pythonProcess.on('close', (code) => {
+    if (code !== 0) {
+      console.error(`Python error: ${error}`);
+      return res.status(500).json({ error: "Python failed", detail: error });
+    }
+
+    try {
+      const result = JSON.parse(output);
+      res.json(result);
+    } catch (parseError) {
+      console.error(`JSON parse error: ${parseError}, output: ${output}`);
+      res.status(500).json({ error: "JSON parse failed", detail: output });
+    }
+  });
+});
+
 // 列出规则
 app.get('/api/list_rules', (req, res) => {
   // Python 直接接收 JSON，不做任何转义处理

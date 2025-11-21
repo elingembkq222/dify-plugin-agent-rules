@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Table, Button, Space, Tag, message, Collapse } from 'antd';
+import { Table, Button, Space, Tag, message, Collapse, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, ReloadOutlined, CopyOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import { listRules, updateRule } from '../api';
+import { listRules, updateRule, deleteRule } from '../api';
 import RuleExecutionList from './RuleExecutionList';
 
 const { Panel } = Collapse;
@@ -12,13 +12,13 @@ const RulesList = () => {
   const [expandedRuleId, setExpandedRuleId] = useState(null);
   const hasFetched = useRef(false);
 
-  const fetchRules = () => {
+  const fetchRules = (silent = false) => {
     setLoading(true);
     listRules()
       .then(response => {
         console.log('API响应:', response.data);
         setRules(response.data.rulesets || response.data.rules || []);
-        message.success('规则列表加载成功');
+        if (!silent) message.success('规则列表加载成功');
       })
       .catch(error => {
         console.error('加载规则失败 - 详细错误:', error);
@@ -41,8 +41,25 @@ const RulesList = () => {
   }, []);
 
   const handleDelete = (ruleId) => {
-    // TODO: 实现删除功能
-    message.info('删除规则功能待实现');
+    Modal.confirm({
+      title: '确认删除规则集',
+      content: '删除规则集将同时删除其执行规则，是否继续？',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: () => {
+        deleteRule(ruleId)
+          .then(() => {
+            message.success('规则集删除成功');
+            if (expandedRuleId === ruleId) setExpandedRuleId(null);
+            fetchRules(true);
+          })
+          .catch(err => {
+            message.error('规则集删除失败');
+            console.error('删除失败:', err);
+          });
+      },
+    });
   };
 
   const handleEdit = (rule) => {
@@ -77,8 +94,10 @@ const RulesList = () => {
     // 更新本地规则列表
     const updatedRules = rules.map(rule => rule.id === ruleSetId ? updatedRuleSet : rule);
     setRules(updatedRules);
-    // 收起面板
-    setExpandedRuleId(null);
+    // 保持展开面板
+    setExpandedRuleId(ruleSetId);
+    // 静默刷新，同步服务端的 updated_at 等字段
+    fetchRules(true);
   };
 
   const columns = [

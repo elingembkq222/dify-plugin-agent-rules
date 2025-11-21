@@ -50,4 +50,8 @@ export const updateRule = (ruleData) => {
   return axiosInstance.post('/update_rule', ruleData);
 };
 
+export const deleteRule = (id) => {
+  return axiosInstance.post('/delete_rule', { id });
+};
+
 export default axiosInstance;

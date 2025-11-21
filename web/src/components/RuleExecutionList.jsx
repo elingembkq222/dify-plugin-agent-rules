@@ -42,12 +42,14 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
           // 新增规则，生成 UUID
           updatedRules = [...rules, { ...values, id: crypto.randomUUID() }];
         }
-        // 更新规则集
+        // 先更新本地列表，提升交互体验
+        setRules(updatedRules);
+        // 更新规则集到后端
         updateRule({ ...ruleSet, rules: updatedRules })
           .then(() => {
             message.success('规则保存成功');
             setIsModalVisible(false);
-            onUpdate(); // 刷新规则列表
+            onUpdate(ruleSet.id, updatedRules); // 刷新规则集
           })
           .catch(err => {
             message.error('规则保存失败');
@@ -70,10 +72,13 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
       cancelText: '取消',
       onOk: () => {
         const updatedRules = rules.filter(rule => rule.id !== id);
+        // 先更新本地列表
+        setRules(updatedRules);
+        // 更新后端规则集
         updateRule({ ...ruleSet, rules: updatedRules })
           .then(() => {
             message.success('规则删除成功');
-            onUpdate(); // 刷新规则列表
+            onUpdate(ruleSet.id, updatedRules); // 刷新规则集
           })
           .catch(err => {
             message.error('规则删除失败');
@@ -104,7 +109,7 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
     updateRule({ ...ruleSet, rules })
       .then(() => {
         message.success('规则顺序保存成功');
-        onUpdate(); // 刷新规则列表
+        onUpdate(ruleSet.id, rules); // 刷新规则集
       })
       .catch(err => {
         message.error('规则顺序保存失败');
