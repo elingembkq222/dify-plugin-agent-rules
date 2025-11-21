@@ -124,7 +124,10 @@ print(json.dumps({
   let error = '';
 
   pythonProcess.stdout.on('data', (d) => { output += d.toString(); });
-  pythonProcess.stderr.on('data', (d) => { error += d.toString(); });
+  pythonProcess.stderr.on('data', (d) => { 
+    error += d.toString(); 
+    console.error('Python stderr:', d.toString());
+  });
 
   pythonProcess.on('close', (code) => {
     if (code !== 0) {
@@ -267,58 +270,24 @@ app.post('/api/validate_ruleset', (req, res) => {
   const now = new Date().toISOString();
   // 支持多种请求格式
   const ruleset = data.ruleset || data.rules || [];
-  const context = data.context || data.user_input || {};
+  // 支持多种输入格式：context、user_input、input
+  let context = data.context || data.user_input || data.input || {};
+  
+  // 如果有input字段但没有context，则将input包装到context中
+  if (data.input && !data.context) {
+    context = { ...context, input: data.input };
+  }
+  
   const business_db_url = data.business_db_url || undefined;
 
   // Python 直接接收 JSON，不做任何转义处理
   const pythonProcess = spawn('python3', [
-    '-c',
-    `
-import json, os, sys, traceback
-from dotenv import load_dotenv
-from provider.rule_engine import execute_rule_set
-
-load_dotenv()
-
-# 解析JSON字符串
-ruleset_json = '''${JSON.stringify(ruleset)}'''
-context_json = '''${JSON.stringify(context)}'''
-business_db_url_json = '''${business_db_url !== undefined ? JSON.stringify(business_db_url) : 'null'}'''
-
-try:
-    ruleset = json.loads(ruleset_json)
-    context = json.loads(context_json)
-    business_db_url = json.loads(business_db_url_json) if business_db_url_json != 'null' and business_db_url_json != 'undefined' else None
-    
-    result = execute_rule_set(ruleset, context, business_db_url=business_db_url)
-    
-    # Only output JSON, no extra logging
-    print(json.dumps({
-      "success": True,
-      "result": result
-    }, ensure_ascii=False))
-except Exception as e:
-    # 捕获所有异常，包括数据库错误，并返回详细的错误信息
-    error_type = type(e).__name__
-    error_message = str(e)
-    traceback_str = traceback.format_exc()
-    
-    # Only output JSON error to stderr
-    print(json.dumps({
-      "success": False,
-      "error": {
-        "type": error_type,
-        "message": error_message,
-        "traceback": traceback_str
-      }
-    }, ensure_ascii=False), file=sys.stderr)
-    
-    # 返回非零退出码以指示错误
-    sys.exit(1)
-    `
+    'tools/validate_ruleset.py',
+    JSON.stringify(ruleset),
+    JSON.stringify(context),
+    business_db_url || ''
   ], { 
     cwd: '../',
-    // 设置环境变量以禁用Python输出
     env: { ...process.env, PYTHONUNBUFFERED: '1' }
   });
 

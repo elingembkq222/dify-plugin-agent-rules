@@ -31,6 +31,9 @@ fi
 sleep 1
 
 # 启动服务部分
+export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
+pip3 install -r requirements.txt
+
 # 启动后端服务
 echo -e "\n\033[1;34m⚙️  启动后端服务...\033[0m"
 cd web && node direct-server.js > ../logs/backend.log 2>&1 &

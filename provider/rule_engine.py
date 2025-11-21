@@ -115,7 +115,10 @@ class RuleEngine:
         try:
             # Handle string expressions (custom expressions)
             if isinstance(expression, str):
-                return self._evaluate_custom_expression(expression, context)
+                custom_result = self._evaluate_custom_expression(expression, context)
+                if isinstance(custom_result, dict):
+                    return custom_result
+                return {'result': bool(custom_result)}
                 
             # Handle dictionary expressions
             if not isinstance(expression, dict):
@@ -230,6 +233,8 @@ class RuleEngine:
         return self.OPERATORS[op](actual, expected)
     
     def _evaluate_custom_expression(self, custom_expr: str, context: Dict[str, Any]) -> Any:
+        substituted_expr = custom_expr  # 初始化变量
+        import re  # 在函数开头导入re模块
         try:
             # 创建安全评估命名空间
             safe_globals = {
@@ -247,7 +252,6 @@ class RuleEngine:
                     'list': list,
                     'dict': dict,
                     'tuple': tuple,
-                    'set': set,
                 },
                 're': re
             }
@@ -277,18 +281,72 @@ class RuleEngine:
                     else:
                         converted_context[key] = value
                 elif isinstance(value, dict):
-                    # 如果是字典，尝试提取第一个值
+                    # 对于字典类型，检查是否是数据库查询结果
+                    # 如果是单字段查询结果，尝试提取实际值
                     if len(value) == 1:
-                        converted_context[key] = list(value.values())[0]
+                        # 检查是否是常见的数据库字段名
+                        first_key = list(value.keys())[0]
+                        if first_key.lower() in ['id', 'count', 'sum', 'avg', 'max', 'min', 'total', 'value', 'result']:
+                            converted_context[key] = value[first_key]
+                        else:
+                            # 对于其他情况，保持原字典
+                            converted_context[key] = value
                     else:
+                        # 多字段字典，保持原样
                         converted_context[key] = value
                 else:
                     converted_context[key] = value
 
+            # 创建包装后的上下文，以便支持context.field语法
+            wrapped_context = {
+                'context': converted_context,
+                'input': converted_context
+            }
+
             # 替换表达式中的变量占位符
-            substituted_expr = self.data_resolver._replace_placeholders(custom_expr, converted_context)
-            print(f"DEBUG: substituted_expr={substituted_expr}, context.consumption_count={converted_context.get('consumption_count')}")
-            print(f"DEBUG: type(consumption_count)={type(converted_context.get('consumption_count'))}")
+            substituted_expr = self.data_resolver._replace_placeholders(custom_expr, wrapped_context)
+
+            # 如果替换后仍有占位符，尝试直接使用上下文变量
+            if '{{' in substituted_expr and '}}' in substituted_expr:
+                # 创建一个包含所有上下文变量的字典
+                context_vars = {}
+                for key, value in converted_context.items():
+                    context_vars[key] = value
+                
+                # 使用正则表达式替换剩余的占位符
+                def replace_remaining(match):
+                    var_name = match.group(1)
+                    # 处理context.field格式
+                    if var_name.startswith('context.'):
+                        field_name = var_name[8:]  # 去掉'context.'前缀
+                        if field_name in context_vars:
+                            return str(context_vars[field_name])
+                    # 处理input.field格式
+                    elif var_name.startswith('input.'):
+                        field_name = var_name[6:]  # 去掉'input.'前缀
+                        if field_name in context_vars:
+                            return str(context_vars[field_name])
+                    # 处理直接字段名
+                    elif var_name in context_vars:
+                        return str(context_vars[var_name])
+                    return match.group(0)
+                
+                substituted_expr = re.sub(r'\{\{([^}]+)\}\}', replace_remaining, substituted_expr)
+
+            # 对于简单的比较表达式，直接使用上下文变量而不是包装器
+            if 'context.' in substituted_expr and any(op in substituted_expr for op in ['<=', '>=', '==', '!=', '<', '>']):
+                # 提取context.field名称
+                context_match = re.search(r'context\.(\w+)', substituted_expr)
+                if context_match:
+                    field_name = context_match.group(1)
+                    if field_name in converted_context:
+                        # 直接替换为实际值
+                        field_value = converted_context[field_name]
+                        direct_expr = substituted_expr.replace(f'context.{field_name}', str(field_value))
+                        
+                        # 使用eval安全评估直接表达式
+                        result = eval(direct_expr, safe_globals, {})
+                        return result
 
             # 定义上下文访问包装器类
             class ContextWrapper:
@@ -302,6 +360,7 @@ class RuleEngine:
                             return ContextWrapper(value)
                         elif isinstance(value, list):
                             return [ContextWrapper(item) if isinstance(item, dict) else item for item in value]
+                        # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
                         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
@@ -313,9 +372,13 @@ class RuleEngine:
                             return ContextWrapper(value)
                         elif isinstance(value, list):
                             return [ContextWrapper(item) if isinstance(item, dict) else item for item in value]
+                        # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
                         raise IndexError(f"'{type(self).__name__}' object has no item with key '{key}'")
+                        
+                def __repr__(self):
+                    return f"ContextWrapper({self.data})"
 
             # 定义输入访问包装器类
             class InputWrapper:
@@ -329,6 +392,7 @@ class RuleEngine:
                             return InputWrapper(value)
                         elif isinstance(value, list):
                             return [InputWrapper(item) if isinstance(item, dict) else item for item in value]
+                        # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
                         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
@@ -340,9 +404,13 @@ class RuleEngine:
                             return InputWrapper(value)
                         elif isinstance(value, list):
                             return [InputWrapper(item) if isinstance(item, dict) else item for item in value]
+                        # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
                         raise IndexError(f"'{type(self).__name__}' object has no item with key '{key}'")
+                        
+                def __repr__(self):
+                    return f"InputWrapper({self.data})"
 
             # 创建安全的上下文变量
             safe_locals = {
@@ -419,7 +487,9 @@ class RuleEngine:
                     if 'type' not in req:
                         req['type'] = 'context'
                     try:
-                        resolved_context[req['name']] = self.data_resolver.resolve_data(req, context)
+                        req_result = self.data_resolver.resolve_data(req, context)
+                        if req_result is not None:
+                            resolved_context[req['name']] = req_result
                     except Exception as e:
                         # If there's an error resolving required data, add it to the context as an error
                         resolved_context[req['name']] = None
@@ -479,7 +549,9 @@ class RuleEngine:
                             if 'type' not in req:
                                 req['type'] = 'context'
                             try:
-                                rule_context[req['name']] = self.data_resolver.resolve_data(req, context)
+                                req_result = self.data_resolver.resolve_data(req, context)
+                                if req_result is not None:
+                                    rule_context[req['name']] = req_result
                             except Exception as e:
                                 # If there's an error resolving required data, add it to the context as an error
                                 rule_context[req['name']] = None
