@@ -114,8 +114,18 @@ class DataResolver:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
-                return None
-        return value
+                break
+        else:
+            return value
+        if key.startswith('input.') and isinstance(data, dict):
+            alt = key[len('input.'):]
+            if alt in data:
+                return data[alt]
+        if key.startswith('context.') and isinstance(data, dict):
+            alt = key[len('context.'):]
+            if alt in data:
+                return data[alt]
+        return None
 
 def resolve_data(requirement: Dict[str, Any], context: Dict[str, Any], business_db_url: Optional[str] = None, rule_db_url: Optional[str] = None) -> Any:
     """
