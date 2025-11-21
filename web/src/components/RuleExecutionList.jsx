@@ -17,8 +17,11 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
   const showModal = (rule = null) => {
     setEditingRule(rule);
     if (rule) {
-      // 如果是编辑，填充表单数据
-      expandForm.setFieldsValue(rule);
+      const initial = { ...rule };
+      if (Array.isArray(rule.requires)) {
+        initial.requires = JSON.stringify(rule.requires, null, 2);
+      }
+      expandForm.setFieldsValue(initial);
     } else {
       expandForm.resetFields();
       setLlmQuery('');
@@ -49,6 +52,9 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
           expression: rule.expression || '',
           message: rule.message || ''
         };
+        if (Array.isArray(rule.requires)) {
+          fields.requires = JSON.stringify(rule.requires, null, 2);
+        }
         expandForm.setFieldsValue(fields);
         message.success('已根据自然语言生成执行规则');
       })
@@ -64,12 +70,28 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
     expandForm.validateFields()
       .then(values => {
         let updatedRules;
+        let requires;
+        if (typeof values.requires === 'string') {
+          const t = values.requires.trim();
+          if (t.length > 0) {
+            try { requires = JSON.parse(t); } catch { requires = undefined; }
+          }
+        }
         if (editingRule) {
           // 更新现有规则
-          updatedRules = rules.map(rule => rule.id === editingRule.id ? { ...rule, ...values } : rule);
+          updatedRules = rules.map(rule => {
+            if (rule.id === editingRule.id) {
+              const next = { ...rule, ...values };
+              if (requires) next.requires = requires;
+              return next;
+            }
+            return rule;
+          });
         } else {
           // 新增规则，生成 UUID
-          updatedRules = [...rules, { ...values, id: crypto.randomUUID() }];
+          const newRule = { ...values, id: crypto.randomUUID() };
+          if (requires) newRule.requires = requires;
+          updatedRules = [...rules, newRule];
         }
         // 先更新本地列表，提升交互体验
         setRules(updatedRules);
@@ -260,8 +282,11 @@ const RuleExecutionList = ({ ruleSet, onUpdate }) => {
           <Form.Item name="expression" label="规则表达式" rules={[{ required: true, message: '请输入规则表达式' }]}>
             <Input.TextArea placeholder="如：context.accumulated_sick_leave_days <= 7" rows={2} />
           </Form.Item>
-          <Form.Item name="message" label="提示信息" rules={[{ required: true, message: '请输入提示信息' }]}>
+          <Form.Item name="message" label="提示信息" rules={[{ required: true, message: '请输入提示信息' }]}> 
             <Input.TextArea placeholder="如：门诊病假天数已超过年度限制的7天。" rows={2} />
+          </Form.Item>
+          <Form.Item name="requires" label="数据依赖(可选, JSON数组)"> 
+            <Input.TextArea placeholder='[{"name":"consumption_count","source":"db","query":"SELECT COUNT(*) FROM ...","transform":"count"}]' rows={4} />
           </Form.Item>
         </Form>
       </Modal>
