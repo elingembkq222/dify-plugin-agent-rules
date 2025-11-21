@@ -369,7 +369,7 @@ class RuleEngine:
                         # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
-                        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+                        return None
 
                 def __getitem__(self, key):
                     try:
@@ -381,7 +381,7 @@ class RuleEngine:
                         # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
-                        raise IndexError(f"'{type(self).__name__}' object has no item with key '{key}'")
+                        return None
                         
                 def __repr__(self):
                     return f"ContextWrapper({self.data})"
@@ -401,7 +401,7 @@ class RuleEngine:
                         # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
-                        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+                        return None
 
                 def __getitem__(self, key):
                     try:
@@ -413,7 +413,7 @@ class RuleEngine:
                         # 确保返回原始值，而不是包装对象
                         return value
                     except KeyError:
-                        raise IndexError(f"'{type(self).__name__}' object has no item with key '{key}'")
+                        return None
                         
                 def __repr__(self):
                     return f"InputWrapper({self.data})"
@@ -428,8 +428,11 @@ class RuleEngine:
             result = eval(substituted_expr, safe_globals, safe_locals)
             return result
         except Exception as e:
+            msg = str(e)
+            if isinstance(e, (TypeError, AttributeError, IndexError, NameError)) or 'NoneType' in msg:
+                return False
             error_response = create_expression_evaluation_error_response(
-                message=f"自定义表达式评估错误: {str(e)}",
+                message=f"自定义表达式评估错误: {msg}",
                 context={"custom_expression": custom_expr, "substituted_expr": substituted_expr}
             )
             raise Exception(error_response.to_json()) from e
